@@ -195,7 +195,7 @@ class AppState:
             warnings=[],
         )
     
-    def detect_leaks(self, strategy: str) -> LeakDetectionResponse:
+    def detect_leaks(self, strategy: str, num_sensors: int = 5) -> LeakDetectionResponse:
         """Run leak detection with the specified strategy."""
         start_time = time.time()
         
@@ -214,40 +214,69 @@ class AppState:
         
         # Convert to response schema
         suspected = []
+        detected_node_ids = []
         for leak in result.detected_leaks:
+            node_id = leak['node_id']
+            detected_node_ids.append(node_id)
             suspected.append(SuspectedLeak(
-                node_id=leak['node_id'],
+                node_id=node_id,
                 confidence=leak['confidence'],
                 reason=leak.get('reason', f"Severity: {leak.get('estimated_severity', 'Unknown')}"),
                 pressure=leak.get('pressure'),
                 flow_imbalance=leak.get('flow_imbalance'),
             ))
         
+        # Calculate detection rate: how many actual leaks were detected
+        actual_leaks = set(self.current_active_leaks)
+        detected_set = set(detected_node_ids)
+        true_positives = len(actual_leaks & detected_set)
+        false_positives = len(detected_set - actual_leaks)
+        
+        detection_rate = true_positives / len(actual_leaks) if actual_leaks else 0.0
+        false_positive_rate = false_positives / len(detected_set) if detected_set else 0.0
+        
+        # Sensor placements (use top nodes by connectivity as proxy)
+        sensor_placements = [n.id for n in self.nodes[:num_sensors] if n.node_type != 'source']
+        
         return LeakDetectionResponse(
             suspected_leaks=suspected,
+            detected_leaks=detected_node_ids,
+            sensor_placements=sensor_placements,
+            detection_rate=detection_rate,
+            false_positive_rate=false_positive_rate,
             strategy_used=strategy,
             detection_time_ms=detection_time,
         )
     
-    def inject_leaks(self, count: int) -> InjectLeaksResponse:
-        """Inject random leaks into non-source nodes."""
+    def inject_leaks(self, count: int, node_ids: list[int] | None = None) -> InjectLeaksResponse:
+        """Inject leaks into nodes. Replaces existing leaks (not additive)."""
         # Get eligible nodes (non-source)
         eligible = [n for n in self.nodes if n.node_type != "source"]
         
         if not eligible:
             return InjectLeaksResponse(injected_node_ids=[])
         
-        # Select random nodes
-        count = min(count, len(eligible))
-        selected = random.sample(eligible, count)
+        # Clear existing leaks first (makes injection idempotent/replaceable)
+        self.current_active_leaks = []
         
-        # Add to active leaks
-        for node in selected:
-            if node.id not in self.current_active_leaks:
-                self.current_active_leaks.append(node.id)
+        if node_ids:
+            # Use specific node IDs if provided
+            eligible_ids = {n.id for n in eligible}
+            selected_ids = [nid for nid in node_ids if nid in eligible_ids]
+        else:
+            # Select random nodes
+            count = min(count, len(eligible))
+            selected = random.sample(eligible, count)
+            selected_ids = [n.id for n in selected]
+        
+        # Set active leaks
+        self.current_active_leaks = selected_ids
+        
+        # Re-run simulation so active_leaks state is updated
+        self._run_simulation_internal()
         
         return InjectLeaksResponse(
-            injected_node_ids=[n.id for n in selected]
+            injected_node_ids=selected_ids
         )
     
     def clear_leaks(self) -> None:

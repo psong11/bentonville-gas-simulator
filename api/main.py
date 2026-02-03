@@ -211,19 +211,23 @@ async def get_simulation_state():
 @app.post("/api/leaks/detect", response_model=LeakDetectionResponse, tags=["Leaks"])
 async def detect_leaks(request: LeakDetectionRequest):
     """Run leak detection with the specified strategy."""
-    return app_state.detect_leaks(request.strategy.value)
+    return app_state.detect_leaks(request.strategy.value, request.num_sensors)
 
 
 @app.post("/api/leaks/inject", response_model=InjectLeaksResponse, tags=["Leaks"])
 async def inject_leaks(request: InjectLeaksRequest):
-    """Inject random leaks into the network."""
-    result = app_state.inject_leaks(request.count)
+    """Inject leaks into the network. Replaces any existing leaks."""
+    result = app_state.inject_leaks(request.count, request.node_ids)
     
     # Broadcast leak alert to all WebSocket clients
     await manager.broadcast({
         "type": WSMessageType.LEAK_ALERT.value,
         "payload": {"injected_node_ids": result.injected_node_ids}
     })
+    
+    # Also broadcast updated simulation state so clients see active_leaks
+    sim_state = app_state.get_current_simulation_state()
+    await manager.broadcast_simulation_update(sim_state)
     
     return result
 

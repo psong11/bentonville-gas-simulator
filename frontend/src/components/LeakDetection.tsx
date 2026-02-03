@@ -56,14 +56,28 @@ export function LeakDetection({
     }
   }, [selectedNodes, onInjectLeaks]);
 
-  // Handle node selection
+  // Handle node selection - enforce limit
   const handleNodeToggle = useCallback((nodeId: number) => {
-    setSelectedNodes(prev =>
-      prev.includes(nodeId)
-        ? prev.filter(id => id !== nodeId)
-        : [...prev, nodeId]
-    );
+    setSelectedNodes(prev => {
+      if (prev.includes(nodeId)) {
+        return prev.filter(id => id !== nodeId);
+      }
+      // Don't add if already at limit
+      if (prev.length >= numLeaks) {
+        return prev;
+      }
+      return [...prev, nodeId];
+    });
+  }, [numLeaks]);
+
+  // Clear selected if they exceed new limit when numLeaks changes
+  const handleNumLeaksChange = useCallback((newValue: number) => {
+    setNumLeaks(newValue);
+    setSelectedNodes(prev => prev.slice(0, newValue));
   }, []);
+
+  // How many more manual selections can be added
+  const remainingSlots = numLeaks - selectedNodes.length;
 
   // Handle detection
   const handleDetect = useCallback(() => {
@@ -89,42 +103,48 @@ export function LeakDetection({
         </div>
       )}
 
+      {/* Leak Count Setting */}
+      <div className="space-y-3">
+        <h4 className="font-medium text-sm">Number of Leaks</h4>
+        <input
+          type="number"
+          value={numLeaks}
+          onChange={(e) => handleNumLeaksChange(parseInt(e.target.value) || 1)}
+          min={1}
+          max={10}
+          className="input w-full"
+        />
+      </div>
+
       {/* Random Leak Injection */}
       <div className="space-y-3">
-        <h4 className="font-medium text-sm">Random Leak Injection</h4>
-        <div className="flex gap-3 items-end">
-          <div className="flex-1">
-            <label className="label">Number of Leaks</label>
-            <input
-              type="number"
-              value={numLeaks}
-              onChange={(e) => setNumLeaks(parseInt(e.target.value) || 1)}
-              min={1}
-              max={10}
-              className="input w-full"
-            />
-          </div>
-          <button
-            onClick={handleRandomLeaks}
-            disabled={isInjecting}
-            className="btn btn-secondary flex items-center gap-2"
-          >
-            {isInjecting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Plus className="w-4 h-4" />
-            )}
-            Inject
-          </button>
-        </div>
+        <h4 className="font-medium text-sm">Random Injection</h4>
+        <button
+          onClick={handleRandomLeaks}
+          disabled={isInjecting}
+          className="btn btn-secondary w-full flex items-center justify-center gap-2"
+        >
+          {isInjecting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Plus className="w-4 h-4" />
+          )}
+          Inject {numLeaks} Random Leak{numLeaks > 1 ? 's' : ''}
+        </button>
       </div>
 
       {/* Manual Node Selection */}
       <div className="space-y-3">
-        <h4 className="font-medium text-sm">Manual Selection <span className="text-slate-400 font-normal">(optional)</span></h4>
+        <h4 className="font-medium text-sm">
+          Manual Selection 
+          <span className="text-slate-400 font-normal ml-2">
+            ({selectedNodes.length}/{numLeaks} selected)
+          </span>
+        </h4>
         <select
           className="input w-full"
           value=""
+          disabled={remainingSlots === 0}
           onChange={(e) => {
             const nodeId = parseInt(e.target.value);
             if (!isNaN(nodeId)) {
@@ -132,7 +152,11 @@ export function LeakDetection({
             }
           }}
         >
-          <option value="">Select node to add...</option>
+          <option value="">
+            {remainingSlots === 0 
+              ? `All ${numLeaks} slots filled` 
+              : `Select node to add (${remainingSlots} remaining)...`}
+          </option>
           {injectableNodes
             .filter(n => !selectedNodes.includes(n.id))
             .map(node => (
