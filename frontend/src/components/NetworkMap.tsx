@@ -6,7 +6,7 @@
 import { useMemo, useCallback } from 'react';
 import Plot from 'react-plotly.js';
 import type { PlotMouseEvent } from 'plotly.js';
-import type { Network, SimulationState, Node } from '../types';
+import type { Network, SimulationState, Node, LeakDetectionResult } from '../types';
 import { getPressureStatus, getPressureColor } from '../types';
 
 interface NetworkMapProps {
@@ -16,6 +16,7 @@ interface NetworkMapProps {
   selectedPipeId: number | null;
   onPipeSelect: (pipeId: number | null) => void;
   activeLeaks: number[];
+  detectionResult?: LeakDetectionResult | null;
 }
 
 export function NetworkMap({
@@ -25,6 +26,7 @@ export function NetworkMap({
   selectedPipeId,
   onPipeSelect,
   activeLeaks,
+  detectionResult,
 }: NetworkMapProps) {
   // Build node lookup
   const nodeDict = useMemo(() => {
@@ -142,6 +144,117 @@ export function NetworkMap({
     }).filter(Boolean);
   }, [network.pipes, nodeDict, simulationState, selectedPipeId]);
 
+  // Create detection visualization traces
+  const detectionTraces = useMemo(() => {
+    if (!detectionResult) return [];
+
+    const traces: Plotly.Data[] = [];
+    
+    // Calculate false positives: detected but not actually leaking
+    const actualLeakSet = new Set(activeLeaks);
+    const detectedSet = new Set(detectionResult.detected_leaks);
+    const falsePositiveIds = detectionResult.detected_leaks.filter(id => !actualLeakSet.has(id));
+
+    // Sensor placements trace (diamond shape ◆)
+    if (detectionResult.sensor_placements.length > 0) {
+      const sensorNodes = detectionResult.sensor_placements
+        .map(id => nodeDict[id])
+        .filter(Boolean);
+      
+      if (sensorNodes.length > 0) {
+        traces.push({
+          type: 'scattermapbox' as const,
+          mode: 'markers+text' as const,
+          lon: sensorNodes.map(n => n.x),
+          lat: sensorNodes.map(n => n.y),
+          marker: {
+            size: 24,
+            color: 'white',
+            opacity: 0.9,
+          },
+          text: sensorNodes.map(() => '◆'),
+          textfont: {
+            size: 18,
+            color: '#3b82f6', // blue
+          },
+          textposition: 'middle center',
+          hovertemplate: sensorNodes.map(n => 
+            `<b>◆ SENSOR</b><br>${n.name}<extra></extra>`
+          ),
+          name: '◆ Sensors',
+          showlegend: true,
+        });
+      }
+    }
+
+    // Actual leak locations trace (square shape ■)
+    if (activeLeaks.length > 0) {
+      const leakNodes = activeLeaks
+        .map(id => nodeDict[id])
+        .filter(Boolean);
+      
+      if (leakNodes.length > 0) {
+        traces.push({
+          type: 'scattermapbox' as const,
+          mode: 'markers+text' as const,
+          lon: leakNodes.map(n => n.x),
+          lat: leakNodes.map(n => n.y),
+          marker: {
+            size: 26,
+            color: 'white',
+            opacity: 0.9,
+          },
+          text: leakNodes.map(() => '■'),
+          textfont: {
+            size: 20,
+            color: '#dc2626', // red
+          },
+          textposition: 'middle center',
+          hovertemplate: leakNodes.map(n => {
+            const wasDetected = detectedSet.has(n.id);
+            return `<b>■ ACTUAL LEAK</b><br>${n.name}<br>${wasDetected ? '✓ Detected' : '✗ Missed'}<extra></extra>`;
+          }),
+          name: '■ Actual Leaks',
+          showlegend: true,
+        });
+      }
+    }
+
+    // False positive trace (triangle shape ▲)
+    if (falsePositiveIds.length > 0) {
+      const fpNodes = falsePositiveIds
+        .map(id => nodeDict[id])
+        .filter(Boolean);
+      
+      if (fpNodes.length > 0) {
+        traces.push({
+          type: 'scattermapbox' as const,
+          mode: 'markers+text' as const,
+          lon: fpNodes.map(n => n.x),
+          lat: fpNodes.map(n => n.y),
+          marker: {
+            size: 24,
+            color: 'white',
+            opacity: 0.9,
+          },
+          text: fpNodes.map(() => '▲'),
+          textfont: {
+            size: 16,
+            color: '#f59e0b', // amber
+          },
+          textposition: 'middle center',
+          hovertemplate: fpNodes.map(n => 
+            `<b>▲ FALSE POSITIVE</b><br>${n.name}<br>Detected but no leak<extra></extra>`
+          ),
+          name: '▲ False Positives',
+          showlegend: true,
+        });
+      }
+    }
+
+    return traces;
+  }, [detectionResult, activeLeaks, nodeDict]);
+
   // Handle click on pipe
   const handleClick = useCallback((event: PlotMouseEvent) => {
     const point = event.points[0];
@@ -153,9 +266,12 @@ export function NetworkMap({
     }
   }, [onPipeSelect]);
 
+  // Determine if we should show legend (only when detection results exist)
+  const showLegend = detectionResult !== null && detectionResult !== undefined;
+
   return (
     <Plot
-      data={[...pipeTraces, nodeTrace] as Plotly.Data[]}
+      data={[...pipeTraces, nodeTrace, ...detectionTraces] as Plotly.Data[]}
       layout={{
         mapbox: {
           style: 'carto-positron',
@@ -163,7 +279,17 @@ export function NetworkMap({
           zoom: 12,
         },
         margin: { l: 0, r: 0, t: 0, b: 0 },
-        showlegend: false,
+        showlegend: showLegend,
+        legend: {
+          x: 0.01,
+          y: 0.99,
+          xanchor: 'left',
+          yanchor: 'top',
+          bgcolor: 'rgba(255,255,255,0.9)',
+          bordercolor: '#e2e8f0',
+          borderwidth: 1,
+          font: { size: 12 },
+        },
         hovermode: 'closest',
       }}
       config={{
