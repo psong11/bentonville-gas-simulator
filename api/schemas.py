@@ -117,6 +117,12 @@ class LeakDetectionRequest(BaseModel):
         default=LeakDetectionStrategy.COMBINED,
         description="Detection algorithm to use"
     )
+    num_sensors: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Number of sensors to use for detection"
+    )
 
 
 class SuspectedLeak(BaseModel):
@@ -131,13 +137,18 @@ class SuspectedLeak(BaseModel):
 class LeakDetectionResponse(BaseModel):
     """Leak detection results."""
     suspected_leaks: List[SuspectedLeak]
+    detected_leaks: List[int] = Field(default_factory=list, description="Node IDs of detected leaks")
+    sensor_placements: List[int] = Field(default_factory=list, description="Node IDs where sensors are placed")
+    detection_rate: float = Field(default=0.0, ge=0.0, le=1.0, description="Fraction of actual leaks detected")
+    false_positive_rate: float = Field(default=0.0, ge=0.0, le=1.0, description="Fraction of detections that are false positives")
     strategy_used: str
     detection_time_ms: float
 
 
 class InjectLeaksRequest(BaseModel):
-    """Request to inject random leaks."""
-    count: int = Field(default=3, ge=1, le=10, description="Number of leaks to inject")
+    """Request to inject leaks - either random or specific nodes."""
+    count: int = Field(default=3, ge=1, le=10, description="Number of leaks to inject (used for random injection)")
+    node_ids: Optional[List[int]] = Field(default=None, description="Specific node IDs to inject leaks into (overrides count if provided)")
 
 
 class InjectLeaksResponse(BaseModel):
