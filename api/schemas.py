@@ -123,6 +123,10 @@ class LeakDetectionRequest(BaseModel):
         le=20,
         description="Number of sensors to use for detection"
     )
+    sensor_node_ids: Optional[List[int]] = Field(
+        default=None,
+        description="Specific node IDs to place sensors on (overrides num_sensors if provided)"
+    )
 
 
 class SuspectedLeak(BaseModel):

@@ -78,7 +78,7 @@ export function useLeakDetection() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (params: { num_sensors: number }) => api.detectLeaks(params),
+    mutationFn: (params: { num_sensors: number; sensor_node_ids?: number[] }) => api.detectLeaks(params),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.leakDetection, data);
     },
