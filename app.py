@@ -22,6 +22,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 import io
+from streamlit_plotly_events import plotly_events
 
 # Local imports
 from city_gen import CityNetworkGenerator, GasNode, GasPipe
@@ -230,6 +231,8 @@ def initialize_session_state():
         st.session_state.physics_engine = PhysicsEngine()
     if 'demand_multiplier' not in st.session_state:
         st.session_state.demand_multiplier = 1.0
+    if 'selected_pipe_id' not in st.session_state:
+        st.session_state.selected_pipe_id = None
 
 
 def load_or_generate_network(force_regenerate: bool = False, n_nodes: int = DEFAULT_NODES):
@@ -297,8 +300,12 @@ def create_network_visualization(state: SimulationState) -> go.Figure:
         [1.0, '#1976d2']     # Optimal - Blue
     ]
     
-    # Draw pipes (edges)
+    # Get selected pipe ID for highlighting
+    selected_pipe_id = st.session_state.selected_pipe_id
+    
+    # Draw pipes (edges) - draw selected pipe last so it's on top
     edge_traces = []
+    selected_pipe_data = None
     
     for pipe in pipes:
         source_node = next(n for n in nodes if n.id == pipe.source_id)
@@ -312,36 +319,71 @@ def create_network_visualization(state: SimulationState) -> go.Figure:
         # Normalize pressure for color
         norm_pressure = min(avg_pressure / engine.source_pressure, 1.0)
         
-        # Color based on pressure
-        if norm_pressure > 0.7:
-            color = '#1976d2'  # Blue - optimal
-        elif norm_pressure > 0.5:
-            color = '#4caf50'  # Green - normal
-        elif norm_pressure > 0.3:
-            color = '#fbc02d'  # Yellow - low
-        elif norm_pressure > 0.1:
-            color = '#f57c00'  # Orange - warning
-        else:
-            color = '#d32f2f'  # Red - critical
+        # Check if this pipe is selected
+        is_selected = (selected_pipe_id is not None and pipe.id == selected_pipe_id)
         
-        # Line width based on pipe diameter
-        width = max(1, pipe.diameter * 10)
+        # Color based on pressure (or highlight if selected)
+        if is_selected:
+            color = '#e94560'  # Highlight red
+            width = max(6, pipe.diameter * 20)  # Extra thick for selected
+        else:
+            if norm_pressure > 0.7:
+                color = '#1976d2'  # Blue - optimal
+            elif norm_pressure > 0.5:
+                color = '#4caf50'  # Green - normal
+            elif norm_pressure > 0.3:
+                color = '#fbc02d'  # Yellow - low
+            elif norm_pressure > 0.1:
+                color = '#f57c00'  # Orange - warning
+            else:
+                color = '#d32f2f'  # Red - critical
+            width = max(1, pipe.diameter * 10)
         
         # Flow rate for hover
         flow = state.pipe_flow_rates.get(pipe.id, 0)
         
+        hover_text = (
+            f"<b>Pipe #{pipe.id}</b><br>"
+            f"From: {source_node.name}<br>"
+            f"To: {target_node.name}<br>"
+            f"Flow: {abs(flow):.1f} m³/h<br>"
+            f"Diameter: {pipe.diameter*1000:.0f}mm<br>"
+            f"Material: {pipe.material}<br>"
+            f"Pressure Drop: {state.pipe_pressure_drops.get(pipe.id, 0):.1f} kPa"
+        )
+        
+        if is_selected:
+            hover_text += "<br><b>★ SELECTED</b>"
+            # Save selected pipe to draw last
+            selected_pipe_data = {
+                'source_node': source_node,
+                'target_node': target_node,
+                'color': color,
+                'width': width,
+                'hover_text': hover_text
+            }
+        else:
+            fig.add_trace(go.Scattermap(
+                mode='lines',
+                lon=[source_node.x, target_node.x],
+                lat=[source_node.y, target_node.y],
+                line=dict(color=color, width=width),
+                hoverinfo='text',
+                hovertext=hover_text,
+                showlegend=False
+            ))
+    
+    # Draw selected pipe last so it appears on top
+    if selected_pipe_data:
         fig.add_trace(go.Scattermap(
             mode='lines',
-            lon=[source_node.x, target_node.x],
-            lat=[source_node.y, target_node.y],
-            line=dict(color=color, width=width),
+            lon=[selected_pipe_data['source_node'].x, selected_pipe_data['target_node'].x],
+            lat=[selected_pipe_data['source_node'].y, selected_pipe_data['target_node'].y],
+            line=dict(color=selected_pipe_data['color'], width=selected_pipe_data['width']),
             hoverinfo='text',
-            hovertext=f"Pipe #{pipe.id}<br>"
-                     f"Flow: {abs(flow):.1f} m³/h<br>"
-                     f"Diameter: {pipe.diameter*1000:.0f}mm<br>"
-                     f"Material: {pipe.material}<br>"
-                     f"Pressure Drop: {state.pipe_pressure_drops.get(pipe.id, 0):.1f} kPa",
-            showlegend=False
+            hovertext=selected_pipe_data['hover_text'],
+            showlegend=False,
+            name='Selected Pipe'
         ))
     
     # Separate nodes by type for different markers
@@ -530,38 +572,73 @@ def create_pressure_histogram(state: SimulationState) -> go.Figure:
     return fig
 
 
-def create_flow_chart(state: SimulationState) -> go.Figure:
-    """Create bar chart of top flow rates."""
+def create_flow_chart(state: SimulationState) -> tuple[go.Figure, list]:
+    """Create bar chart of top flow rates with source/target info."""
     pipes = st.session_state.pipes
+    nodes = st.session_state.nodes
+    node_dict = {n.id: n for n in nodes}
     
-    # Get top 20 pipes by flow rate
-    flow_data = [
-        (p.id, abs(state.pipe_flow_rates.get(p.id, 0)), p.diameter)
-        for p in pipes
-    ]
-    flow_data.sort(key=lambda x: x[1], reverse=True)
+    # Get top 20 pipes by flow rate with source/target info
+    flow_data = []
+    for p in pipes:
+        flow_rate = abs(state.pipe_flow_rates.get(p.id, 0))
+        source_node = node_dict.get(p.source_id)
+        target_node = node_dict.get(p.target_id)
+        source_name = source_node.name if source_node else f"Node {p.source_id}"
+        target_name = target_node.name if target_node else f"Node {p.target_id}"
+        flow_data.append({
+            'pipe_id': p.id,
+            'flow_rate': flow_rate,
+            'diameter': p.diameter,
+            'source_id': p.source_id,
+            'target_id': p.target_id,
+            'source_name': source_name,
+            'target_name': target_name
+        })
+    
+    flow_data.sort(key=lambda x: x['flow_rate'], reverse=True)
     top_flows = flow_data[:20]
+    
+    # Check if any pipe is selected
+    selected_id = st.session_state.selected_pipe_id
+    
+    # Bar colors - highlight selected pipe
+    bar_colors = []
+    for f in top_flows:
+        if selected_id is not None and f['pipe_id'] == selected_id:
+            bar_colors.append('#e94560')  # Highlight color (red)
+        else:
+            bar_colors.append(f['diameter'] * 1000)  # Normal color by diameter
     
     fig = go.Figure()
     
     fig.add_trace(go.Bar(
-        x=[f"Pipe {f[0]}" for f in top_flows],
-        y=[f[1] for f in top_flows],
-        marker_color=[f[2] * 1000 for f in top_flows],
-        marker_colorscale='Blues',
-        hovertemplate="Pipe ID: %{x}<br>Flow: %{y:.1f} m³/h<extra></extra>"
+        x=[f"Pipe {f['pipe_id']}" for f in top_flows],
+        y=[f['flow_rate'] for f in top_flows],
+        marker_color=bar_colors if selected_id else [f['diameter'] * 1000 for f in top_flows],
+        marker_colorscale='Blues' if not selected_id else None,
+        customdata=[[f['pipe_id'], f['source_name'], f['target_name']] for f in top_flows],
+        hovertemplate=(
+            "<b>Pipe #%{customdata[0]}</b><br>"
+            "Flow: %{y:.1f} m³/h<br>"
+            "From: %{customdata[1]}<br>"
+            "To: %{customdata[2]}<br>"
+            "<i>Click to highlight on map</i>"
+            "<extra></extra>"
+        )
     ))
     
     fig.update_layout(
-        title="Top 20 Pipes by Flow Rate",
+        title="Top 20 Pipes by Flow Rate (Click to Highlight)",
         xaxis_title="Pipe ID",
         yaxis_title="Flow Rate (m³/h)",
         height=300,
         margin=dict(l=40, r=40, t=40, b=40),
-        xaxis_tickangle=-45
+        xaxis_tickangle=-45,
+        clickmode='event+select'
     )
     
-    return fig
+    return fig, top_flows
 
 
 def export_simulation_data() -> bytes:
@@ -908,6 +985,24 @@ def main():
     with col5:
         st.markdown('<span class="legend-item">🔴 <strong>Critical</strong> (<10%)</span>', unsafe_allow_html=True)
     
+    # Selected pipe info display
+    if st.session_state.selected_pipe_id is not None:
+        pipe_id = st.session_state.selected_pipe_id
+        pipe = next((p for p in st.session_state.pipes if p.id == pipe_id), None)
+        if pipe:
+            node_dict = {n.id: n for n in st.session_state.nodes}
+            source_node = node_dict.get(pipe.source_id)
+            target_node = node_dict.get(pipe.target_id)
+            st.info(
+                f"**Selected Pipe #{pipe_id}** | "
+                f"From: {source_node.name if source_node else 'Unknown'} → "
+                f"To: {target_node.name if target_node else 'Unknown'} | "
+                f"Flow: {abs(state.pipe_flow_rates.get(pipe_id, 0)):.1f} m³/h"
+            )
+            if st.button("Clear Selection", key="clear_pipe_selection"):
+                st.session_state.selected_pipe_id = None
+                st.rerun()
+    
     # Map
     fig = create_network_visualization(state)
     st.plotly_chart(fig, use_container_width=True)
@@ -920,8 +1015,24 @@ def main():
         st.plotly_chart(fig_hist, use_container_width=True)
     
     with col2:
-        fig_flow = create_flow_chart(state)
-        st.plotly_chart(fig_flow, use_container_width=True)
+        fig_flow, top_flows = create_flow_chart(state)
+        # Use plotly_events to capture clicks
+        selected_points = plotly_events(
+            fig_flow,
+            click_event=True,
+            hover_event=False,
+            select_event=False,
+            key="flow_chart_events"
+        )
+        
+        # Handle click events
+        if selected_points:
+            point_index = selected_points[0].get('pointIndex')
+            if point_index is not None and point_index < len(top_flows):
+                clicked_pipe_id = top_flows[point_index]['pipe_id']
+                if clicked_pipe_id != st.session_state.selected_pipe_id:
+                    st.session_state.selected_pipe_id = clicked_pipe_id
+                    st.rerun()
     
     # Node details table
     with st.expander("📋 Node Details"):
