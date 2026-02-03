@@ -3,7 +3,7 @@
  * Main Application Component
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Flame, AlertCircle } from 'lucide-react';
 
@@ -25,6 +25,8 @@ import {
   useInjectLeaks,
   useClearLeaks,
 } from './hooks/useApi';
+
+import { useWebSocket } from './hooks/useWebSocket';
 
 import type { NetworkParams, LeakDetectionResult, SimulationState } from './types';
 
@@ -56,9 +58,9 @@ function SimulatorApp() {
   const [demandMultiplier, setDemandMultiplier] = useState(1.0);
   const [selectedPipeId, setSelectedPipeId] = useState<number | null>(null);
   const [detectionResult, setDetectionResult] = useState<LeakDetectionResult | null>(null);
-  const [wsConnected, setWsConnected] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+
+  // WebSocket for real-time updates
+  const { isConnected: wsConnected, lastUpdate, setPressure: wsPressure, setDemandMultiplier: wsDemand } = useWebSocket();
 
   // TanStack Query hooks - network and simulation are separate
   const { data: networkData, isLoading: isLoadingNetwork, error: networkError } = useNetwork();
@@ -78,79 +80,24 @@ function SimulatorApp() {
     .filter(([_, rate]) => rate > 0)
     .map(([id]) => parseInt(id));
 
-  // Auto-run simulation when parameters change (debounced)
+  // Auto-run simulation via WebSocket when parameters change (debounced)
   useEffect(() => {
-    if (!networkData) return; // Don't run until network loaded
+    if (!networkData || !wsConnected) return;
     
     const timer = setTimeout(() => {
-      runSimulationMutation.mutate(
-        { source_pressure: sourcePressure, demand_multiplier: demandMultiplier },
-        { onSuccess: () => setLastUpdate(new Date()) }
-      );
+      // Use WebSocket for real-time broadcast to all clients
+      wsPressure(sourcePressure);
+      wsDemand(demandMultiplier);
     }, 300); // 300ms debounce
     
     return () => clearTimeout(timer);
-  }, [sourcePressure, demandMultiplier]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // WebSocket connection
-  useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.hostname}:8000/ws`;
-    
-    const connect = () => {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('WebSocket connected');
-        setWsConnected(true);
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          if (message.type === 'SIMULATION_UPDATE' || message.type === 'NETWORK_UPDATE' || message.type === 'LEAK_ALERT') {
-            // Invalidate queries to refetch fresh data
-            queryClient.invalidateQueries({ queryKey: ['network'] });
-            queryClient.invalidateQueries({ queryKey: ['simulation'] });
-            setLastUpdate(new Date());
-          }
-        } catch (err) {
-          console.error('WebSocket message parse error:', err);
-        }
-      };
-
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        setWsConnected(false);
-        // Reconnect after 3 seconds
-        setTimeout(connect, 3000);
-      };
-
-      ws.onerror = (err) => {
-        console.error('WebSocket error:', err);
-        ws.close();
-      };
-    };
-
-    connect();
-
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, []);
+  }, [sourcePressure, demandMultiplier, wsConnected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handlers
   const handleRunSimulation = useCallback(() => {
     runSimulationMutation.mutate(
       { source_pressure: sourcePressure, demand_multiplier: demandMultiplier },
-      {
-        onSuccess: () => {
-          setLastUpdate(new Date());
-        },
-      }
+      {}
     );
   }, [sourcePressure, demandMultiplier, runSimulationMutation]);
 
@@ -160,7 +107,6 @@ function SimulatorApp() {
         onSuccess: () => {
           setSelectedPipeId(null);
           setDetectionResult(null);
-          setLastUpdate(new Date());
         },
       });
     },
@@ -174,7 +120,6 @@ function SimulatorApp() {
         {
           onSuccess: () => {
             setDetectionResult(null);
-            setLastUpdate(new Date());
           },
         }
       );
@@ -189,7 +134,6 @@ function SimulatorApp() {
         {
           onSuccess: (data) => {
             setDetectionResult(data);
-            setLastUpdate(new Date());
           },
         }
       );
@@ -201,7 +145,6 @@ function SimulatorApp() {
     clearLeaksMutation.mutate(undefined, {
       onSuccess: () => {
         setDetectionResult(null);
-        setLastUpdate(new Date());
       },
     });
   }, [clearLeaksMutation]);
