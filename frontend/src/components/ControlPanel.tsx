@@ -9,7 +9,9 @@ import type { NetworkParams } from '../types';
 
 interface ControlPanelProps {
   sourcePressure: number;
+  demandMultiplier: number;
   onSourcePressureChange: (pressure: number) => void;
+  onDemandMultiplierChange: (multiplier: number) => void;
   onRunSimulation: () => void;
   onGenerateNetwork: (params: NetworkParams) => void;
   isSimulating: boolean;
@@ -18,7 +20,9 @@ interface ControlPanelProps {
 
 export function ControlPanel({
   sourcePressure,
+  demandMultiplier,
   onSourcePressureChange,
+  onDemandMultiplierChange,
   onRunSimulation,
   onGenerateNetwork,
   isSimulating,
@@ -40,6 +44,16 @@ export function ControlPanel({
       }
     },
     [onSourcePressureChange]
+  );
+
+  const handleDemandChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = parseFloat(e.target.value);
+      if (!isNaN(value)) {
+        onDemandMultiplierChange(value);
+      }
+    },
+    [onDemandMultiplierChange]
   );
 
   const handleParamChange = useCallback(
@@ -78,6 +92,27 @@ export function ControlPanel({
           <span>200 kPa</span>
           <span>500 kPa (default)</span>
           <span>800 kPa</span>
+        </div>
+      </div>
+
+      {/* Demand Multiplier Slider */}
+      <div>
+        <label className="label">
+          Demand Multiplier: {demandMultiplier.toFixed(1)}x
+        </label>
+        <input
+          type="range"
+          min="0.5"
+          max="2.0"
+          step="0.1"
+          value={demandMultiplier}
+          onChange={handleDemandChange}
+          className="input w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+        />
+        <div className="flex justify-between text-xs text-slate-500 mt-1">
+          <span>0.5x (low)</span>
+          <span>1.0x (normal)</span>
+          <span>2.0x (peak)</span>
         </div>
       </div>
 

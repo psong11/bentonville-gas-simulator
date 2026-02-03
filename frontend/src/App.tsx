@@ -53,6 +53,7 @@ const defaultSimulationState: SimulationState = {
 function SimulatorApp() {
   // State
   const [sourcePressure, setSourcePressure] = useState(500);
+  const [demandMultiplier, setDemandMultiplier] = useState(1.0);
   const [selectedPipeId, setSelectedPipeId] = useState<number | null>(null);
   const [detectionResult, setDetectionResult] = useState<LeakDetectionResult | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
@@ -76,6 +77,20 @@ function SimulatorApp() {
   const activeLeaks = Object.entries(simulationState.active_leaks ?? {})
     .filter(([_, rate]) => rate > 0)
     .map(([id]) => parseInt(id));
+
+  // Auto-run simulation when parameters change (debounced)
+  useEffect(() => {
+    if (!networkData) return; // Don't run until network loaded
+    
+    const timer = setTimeout(() => {
+      runSimulationMutation.mutate(
+        { source_pressure: sourcePressure, demand_multiplier: demandMultiplier },
+        { onSuccess: () => setLastUpdate(new Date()) }
+      );
+    }, 300); // 300ms debounce
+    
+    return () => clearTimeout(timer);
+  }, [sourcePressure, demandMultiplier]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // WebSocket connection
   useEffect(() => {
@@ -130,14 +145,14 @@ function SimulatorApp() {
   // Handlers
   const handleRunSimulation = useCallback(() => {
     runSimulationMutation.mutate(
-      { source_pressure: sourcePressure },
+      { source_pressure: sourcePressure, demand_multiplier: demandMultiplier },
       {
         onSuccess: () => {
           setLastUpdate(new Date());
         },
       }
     );
-  }, [sourcePressure, runSimulationMutation]);
+  }, [sourcePressure, demandMultiplier, runSimulationMutation]);
 
   const handleGenerateNetwork = useCallback(
     (params: NetworkParams) => {
@@ -260,7 +275,9 @@ function SimulatorApp() {
           <div className="col-span-3 space-y-6">
             <ControlPanel
               sourcePressure={sourcePressure}
+              demandMultiplier={demandMultiplier}
               onSourcePressureChange={setSourcePressure}
+              onDemandMultiplierChange={setDemandMultiplier}
               onRunSimulation={handleRunSimulation}
               onGenerateNetwork={handleGenerateNetwork}
               isSimulating={runSimulationMutation.isPending}
