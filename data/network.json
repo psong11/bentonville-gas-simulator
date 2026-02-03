@@ -1,0 +1,631 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "generator": "CityNetworkGenerator",
+    "n_nodes": 32,
+    "n_pipes": 33,
+    "seed": null
+  },
+  "nodes": [
+    {
+      "id": 0,
+      "node_type": "source",
+      "x": -94.18994800181645,
+      "y": 36.405931391403136,
+      "base_demand": 0.0,
+      "elevation": 353.4,
+      "name": "Supply Station 1"
+    },
+    {
+      "id": 1,
+      "node_type": "source",
+      "x": -94.23565928953286,
+      "y": 36.38362050343826,
+      "base_demand": 0.0,
+      "elevation": 374.7,
+      "name": "Supply Station 2"
+    },
+    {
+      "id": 2,
+      "node_type": "residential",
+      "x": -94.20029843173637,
+      "y": 36.33992101083721,
+      "base_demand": 2.68,
+      "elevation": 402.1,
+      "name": "2 Oak Street"
+    },
+    {
+      "id": 3,
+      "node_type": "commercial",
+      "x": -94.18995357726301,
+      "y": 36.42373635105672,
+      "base_demand": 14.62,
+      "elevation": 399.7,
+      "name": "Office Complex #3"
+    },
+    {
+      "id": 4,
+      "node_type": "residential",
+      "x": -94.2018292032339,
+      "y": 36.35365983047619,
+      "base_demand": 0.55,
+      "elevation": 387.8,
+      "name": "4 Elm Avenue"
+    },
+    {
+      "id": 5,
+      "node_type": "residential",
+      "x": -94.24191774523345,
+      "y": 36.36584682719557,
+      "base_demand": 2.35,
+      "elevation": 369.6,
+      "name": "5 Hickory Lane"
+    },
+    {
+      "id": 6,
+      "node_type": "residential",
+      "x": -94.16599573591259,
+      "y": 36.406322761223876,
+      "base_demand": 1.83,
+      "elevation": 447.0,
+      "name": "6 Elm Avenue"
+    },
+    {
+      "id": 7,
+      "node_type": "residential",
+      "x": -94.23807513654032,
+      "y": 36.388208757495235,
+      "base_demand": 1.6,
+      "elevation": 352.2,
+      "name": "7 Birch Road"
+    },
+    {
+      "id": 8,
+      "node_type": "commercial",
+      "x": -94.21775028977406,
+      "y": 36.33847938541509,
+      "base_demand": 7.72,
+      "elevation": 412.4,
+      "name": "Walmart Store #8"
+    },
+    {
+      "id": 9,
+      "node_type": "industrial",
+      "x": -94.17796811180575,
+      "y": 36.403974574730505,
+      "base_demand": 156.39,
+      "elevation": 351.4,
+      "name": "Warehouse Complex #9"
+    },
+    {
+      "id": 10,
+      "node_type": "residential",
+      "x": -94.23141745287337,
+      "y": 36.400114312610164,
+      "base_demand": 1.97,
+      "elevation": 448.7,
+      "name": "10 Spruce Street"
+    },
+    {
+      "id": 11,
+      "node_type": "commercial",
+      "x": -94.19794286242605,
+      "y": 36.359789408224586,
+      "base_demand": 43.34,
+      "elevation": 380.9,
+      "name": "Sam's Club #11"
+    },
+    {
+      "id": 12,
+      "node_type": "residential",
+      "x": -94.19824230976349,
+      "y": 36.437588483103234,
+      "base_demand": 0.84,
+      "elevation": 371.4,
+      "name": "12 Spruce Street"
+    },
+    {
+      "id": 13,
+      "node_type": "commercial",
+      "x": -94.24397847819597,
+      "y": 36.38802909308984,
+      "base_demand": 7.0,
+      "elevation": 371.7,
+      "name": "Service Station #13"
+    },
+    {
+      "id": 14,
+      "node_type": "residential",
+      "x": -94.1840572347321,
+      "y": 36.33990451464845,
+      "base_demand": 2.62,
+      "elevation": 372.1,
+      "name": "14 Birch Road"
+    },
+    {
+      "id": 15,
+      "node_type": "industrial",
+      "x": -94.17600801904658,
+      "y": 36.41409491716815,
+      "base_demand": 496.86,
+      "elevation": 381.8,
+      "name": "Industrial Park #15"
+    },
+    {
+      "id": 16,
+      "node_type": "residential",
+      "x": -94.25613669566144,
+      "y": 36.406222253596326,
+      "base_demand": 0.91,
+      "elevation": 391.1,
+      "name": "16 Pine Court"
+    },
+    {
+      "id": 17,
+      "node_type": "commercial",
+      "x": -94.22407099431368,
+      "y": 36.32176379234724,
+      "base_demand": 29.27,
+      "elevation": 387.2,
+      "name": "Medical Center #17"
+    },
+    {
+      "id": 18,
+      "node_type": "residential",
+      "x": -94.19613014786228,
+      "y": 36.45037383717316,
+      "base_demand": 2.22,
+      "elevation": 428.9,
+      "name": "18 Elm Avenue"
+    },
+    {
+      "id": 19,
+      "node_type": "residential",
+      "x": -94.23383234379834,
+      "y": 36.370023380087716,
+      "base_demand": 1.31,
+      "elevation": 367.4,
+      "name": "19 Maple Drive"
+    },
+    {
+      "id": 20,
+      "node_type": "residential",
+      "x": -94.22170446402113,
+      "y": 36.33605081091183,
+      "base_demand": 0.68,
+      "elevation": 391.5,
+      "name": "20 Willow Place"
+    },
+    {
+      "id": 21,
+      "node_type": "residential",
+      "x": -94.19582181196556,
+      "y": 36.42813203015106,
+      "base_demand": 0.54,
+      "elevation": 424.5,
+      "name": "21 Oak Street"
+    },
+    {
+      "id": 22,
+      "node_type": "commercial",
+      "x": -94.25567427779713,
+      "y": 36.39785879057728,
+      "base_demand": 38.14,
+      "elevation": 439.9,
+      "name": "Office Complex #22"
+    },
+    {
+      "id": 23,
+      "node_type": "commercial",
+      "x": -94.21371690748595,
+      "y": 36.36210713897863,
+      "base_demand": 5.59,
+      "elevation": 396.0,
+      "name": "Medical Center #23"
+    },
+    {
+      "id": 24,
+      "node_type": "residential",
+      "x": -94.19394295253255,
+      "y": 36.40993154845781,
+      "base_demand": 0.54,
+      "elevation": 369.9,
+      "name": "24 Cedar Lane"
+    },
+    {
+      "id": 25,
+      "node_type": "industrial",
+      "x": -94.23576973729944,
+      "y": 36.39822623941032,
+      "base_demand": 91.74,
+      "elevation": 362.7,
+      "name": "Processing Facility #25"
+    },
+    {
+      "id": 26,
+      "node_type": "residential",
+      "x": -94.18187052155932,
+      "y": 36.357815494678476,
+      "base_demand": 1.8,
+      "elevation": 431.7,
+      "name": "26 Oak Street"
+    },
+    {
+      "id": 27,
+      "node_type": "commercial",
+      "x": -94.18804465297696,
+      "y": 36.44023067678008,
+      "base_demand": 32.82,
+      "elevation": 394.9,
+      "name": "Walmart Store #27"
+    },
+    {
+      "id": 28,
+      "node_type": "residential",
+      "x": -94.22599749543842,
+      "y": 36.41177980590102,
+      "base_demand": 0.96,
+      "elevation": 383.2,
+      "name": "28 Pine Court"
+    },
+    {
+      "id": 29,
+      "node_type": "residential",
+      "x": -94.22815175485071,
+      "y": 36.320006207289374,
+      "base_demand": 1.76,
+      "elevation": 386.9,
+      "name": "29 Ash Drive"
+    },
+    {
+      "id": 30,
+      "node_type": "residential",
+      "x": -94.17006258137144,
+      "y": 36.44215656194771,
+      "base_demand": 1.46,
+      "elevation": 356.1,
+      "name": "30 Cedar Lane"
+    },
+    {
+      "id": 31,
+      "node_type": "residential",
+      "x": -94.2138187360132,
+      "y": 36.37182704442163,
+      "base_demand": 1.2,
+      "elevation": 356.1,
+      "name": "31 Oak Street"
+    }
+  ],
+  "pipes": [
+    {
+      "id": 0,
+      "source_id": 10,
+      "target_id": 25,
+      "length": 526.6,
+      "diameter": 0.257,
+      "roughness": 6.89e-05,
+      "material": "steel",
+      "year_installed": 1971
+    },
+    {
+      "id": 1,
+      "source_id": 17,
+      "target_id": 29,
+      "length": 493.2,
+      "diameter": 0.134,
+      "roughness": 1.07e-05,
+      "material": "polyethylene",
+      "year_installed": 1971
+    },
+    {
+      "id": 2,
+      "source_id": 8,
+      "target_id": 20,
+      "length": 515.1,
+      "diameter": 0.112,
+      "roughness": 4.95e-05,
+      "material": "steel",
+      "year_installed": 2014
+    },
+    {
+      "id": 3,
+      "source_id": 1,
+      "target_id": 7,
+      "length": 575.6,
+      "diameter": 0.463,
+      "roughness": 5.26e-05,
+      "material": "steel",
+      "year_installed": 2007
+    },
+    {
+      "id": 4,
+      "source_id": 0,
+      "target_id": 24,
+      "length": 627.5,
+      "diameter": 0.447,
+      "roughness": 6.26e-05,
+      "material": "steel",
+      "year_installed": 1985
+    },
+    {
+      "id": 5,
+      "source_id": 7,
+      "target_id": 13,
+      "length": 655.6,
+      "diameter": 0.184,
+      "roughness": 9.8e-06,
+      "material": "polyethylene",
+      "year_installed": 1984
+    },
+    {
+      "id": 6,
+      "source_id": 4,
+      "target_id": 11,
+      "length": 805.6,
+      "diameter": 0.144,
+      "roughness": 3.08e-05,
+      "material": "ductile_iron",
+      "year_installed": 2001
+    },
+    {
+      "id": 7,
+      "source_id": 3,
+      "target_id": 21,
+      "length": 813.9,
+      "diameter": 0.165,
+      "roughness": 2.78e-05,
+      "material": "ductile_iron",
+      "year_installed": 2013
+    },
+    {
+      "id": 8,
+      "source_id": 16,
+      "target_id": 22,
+      "length": 929.8,
+      "diameter": 0.183,
+      "roughness": 1.03e-05,
+      "material": "polyethylene",
+      "year_installed": 1977
+    },
+    {
+      "id": 9,
+      "source_id": 5,
+      "target_id": 19,
+      "length": 1010.1,
+      "diameter": 0.058,
+      "roughness": 9.8e-06,
+      "material": "polyethylene",
+      "year_installed": 1984
+    },
+    {
+      "id": 10,
+      "source_id": 23,
+      "target_id": 31,
+      "length": 1079.0,
+      "diameter": 0.128,
+      "roughness": 3.73e-05,
+      "material": "ductile_iron",
+      "year_installed": 1975
+    },
+    {
+      "id": 11,
+      "source_id": 21,
+      "target_id": 12,
+      "length": 1083.5,
+      "diameter": 0.089,
+      "roughness": 9.5e-06,
+      "material": "polyethylene",
+      "year_installed": 1988
+    },
+    {
+      "id": 12,
+      "source_id": 7,
+      "target_id": 25,
+      "length": 1141.0,
+      "diameter": 0.202,
+      "roughness": 2.8e-05,
+      "material": "ductile_iron",
+      "year_installed": 2012
+    },
+    {
+      "id": 13,
+      "source_id": 9,
+      "target_id": 15,
+      "length": 1144.2,
+      "diameter": 0.228,
+      "roughness": 3.78e-05,
+      "material": "ductile_iron",
+      "year_installed": 1973
+    },
+    {
+      "id": 14,
+      "source_id": 12,
+      "target_id": 27,
+      "length": 1169.3,
+      "diameter": 0.131,
+      "roughness": 5.31e-05,
+      "material": "steel",
+      "year_installed": 2006
+    },
+    {
+      "id": 15,
+      "source_id": 0,
+      "target_id": 9,
+      "length": 1347.4,
+      "diameter": 0.305,
+      "roughness": 6.12e-05,
+      "material": "steel",
+      "year_installed": 1988
+    },
+    {
+      "id": 16,
+      "source_id": 9,
+      "target_id": 6,
+      "length": 1354.3,
+      "diameter": 0.215,
+      "roughness": 3.43e-05,
+      "material": "ductile_iron",
+      "year_installed": 1987
+    },
+    {
+      "id": 17,
+      "source_id": 10,
+      "target_id": 28,
+      "length": 1427.8,
+      "diameter": 0.068,
+      "roughness": 7.7e-06,
+      "material": "pvc",
+      "year_installed": 1970
+    },
+    {
+      "id": 18,
+      "source_id": 12,
+      "target_id": 18,
+      "length": 1438.4,
+      "diameter": 0.09,
+      "roughness": 7.6e-06,
+      "material": "pvc",
+      "year_installed": 1972
+    },
+    {
+      "id": 19,
+      "source_id": 1,
+      "target_id": 19,
+      "length": 1522.8,
+      "diameter": 0.467,
+      "roughness": 6.66e-05,
+      "material": "steel",
+      "year_installed": 1976
+    },
+    {
+      "id": 20,
+      "source_id": 2,
+      "target_id": 4,
+      "length": 1534.4,
+      "diameter": 0.095,
+      "roughness": 1.08e-05,
+      "material": "polyethylene",
+      "year_installed": 1970
+    },
+    {
+      "id": 21,
+      "source_id": 24,
+      "target_id": 3,
+      "length": 1595.0,
+      "diameter": 0.145,
+      "roughness": 3.33e-05,
+      "material": "ductile_iron",
+      "year_installed": 1991
+    },
+    {
+      "id": 22,
+      "source_id": 20,
+      "target_id": 17,
+      "length": 1607.5,
+      "diameter": 0.136,
+      "roughness": 7.8e-06,
+      "material": "polyethylene",
+      "year_installed": 2012
+    },
+    {
+      "id": 23,
+      "source_id": 4,
+      "target_id": 23,
+      "length": 1618.8,
+      "diameter": 0.182,
+      "roughness": 6.57e-05,
+      "material": "steel",
+      "year_installed": 1978
+    },
+    {
+      "id": 24,
+      "source_id": 13,
+      "target_id": 22,
+      "length": 1695.8,
+      "diameter": 0.115,
+      "roughness": 5.22e-05,
+      "material": "steel",
+      "year_installed": 2008
+    },
+    {
+      "id": 25,
+      "source_id": 11,
+      "target_id": 26,
+      "length": 1797.4,
+      "diameter": 0.136,
+      "roughness": 5.54e-05,
+      "material": "steel",
+      "year_installed": 2001
+    },
+    {
+      "id": 26,
+      "source_id": 2,
+      "target_id": 14,
+      "length": 1802.8,
+      "diameter": 0.064,
+      "roughness": 7.6e-06,
+      "material": "polyethylene",
+      "year_installed": 2016
+    },
+    {
+      "id": 27,
+      "source_id": 2,
+      "target_id": 8,
+      "length": 1943.8,
+      "diameter": 0.148,
+      "roughness": 9e-06,
+      "material": "polyethylene",
+      "year_installed": 1995
+    },
+    {
+      "id": 28,
+      "source_id": 27,
+      "target_id": 30,
+      "length": 2007.4,
+      "diameter": 0.131,
+      "roughness": 6.53e-05,
+      "material": "steel",
+      "year_installed": 1979
+    },
+    {
+      "id": 29,
+      "source_id": 19,
+      "target_id": 31,
+      "length": 2230.5,
+      "diameter": 0.052,
+      "roughness": 1.05e-05,
+      "material": "polyethylene",
+      "year_installed": 1974
+    },
+    {
+      "id": 30,
+      "source_id": 24,
+      "target_id": 28,
+      "length": 3564.0,
+      "diameter": 0.095,
+      "roughness": 5.8e-06,
+      "material": "pvc",
+      "year_installed": 2008
+    },
+    {
+      "id": 31,
+      "source_id": 0,
+      "target_id": 15,
+      "length": 1793.1,
+      "diameter": 0.303,
+      "roughness": 5.45e-05,
+      "material": "steel",
+      "year_installed": 2003
+    },
+    {
+      "id": 32,
+      "source_id": 1,
+      "target_id": 13,
+      "length": 1045.1,
+      "diameter": 0.459,
+      "roughness": 4.95e-05,
+      "material": "steel",
+      "year_installed": 2014
+    }
+  ]
+}
