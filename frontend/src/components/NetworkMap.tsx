@@ -58,16 +58,11 @@ export function NetworkMap({
     });
 
     const sizes = network.nodes.map(node => {
-      if (node.node_type === 'source') return 20;
+      if (activeLeaks.includes(node.id)) return 20; // larger for leaks
+      if (node.node_type === 'source') return 18;
       if (node.node_type === 'industrial') return 14;
       if (node.node_type === 'commercial') return 12;
       return 10;
-    });
-
-    const symbols = network.nodes.map(node => {
-      if (activeLeaks.includes(node.id)) return 'x';
-      if (node.node_type === 'source') return 'star';
-      return 'circle';
     });
 
     const hoverText = network.nodes.map(node => {
@@ -91,7 +86,6 @@ export function NetworkMap({
       marker: {
         size: sizes,
         color: colors,
-        symbol: symbols,
       },
       text: network.nodes.map(n => n.name),
       hovertemplate: hoverText.map(t => t + '<extra></extra>'),

@@ -121,7 +121,7 @@ export function LeakDetection({
 
       {/* Manual Node Selection */}
       <div className="space-y-3">
-        <h4 className="font-medium text-sm">Manual Selection</h4>
+        <h4 className="font-medium text-sm">Manual Selection <span className="text-slate-400 font-normal">(optional)</span></h4>
         <select
           className="input w-full"
           value=""
@@ -192,6 +192,9 @@ export function LeakDetection({
           <Search className="w-4 h-4" />
           Leak Detection
         </h4>
+        <p className="text-xs text-slate-500">
+          Sensors are placed optimally across the network to detect pressure anomalies caused by leaks.
+        </p>
         
         <div className="flex gap-3 items-end">
           <div className="flex-1">

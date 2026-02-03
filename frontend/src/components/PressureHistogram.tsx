@@ -113,18 +113,20 @@ export function PressureHistogram({
         data={traces}
         layout={{
           barmode: 'stack',
-          margin: { l: 50, r: 20, t: 10, b: 40 },
+          margin: { l: 50, r: 20, t: 10, b: 80 },
           xaxis: {
             title: { text: 'Pressure (kPa)' },
           },
           yaxis: {
             title: { text: 'Node Count' },
           },
-          height: 250,
+          height: 280,
           showlegend: true,
           legend: {
             orientation: 'h' as const,
-            y: -0.2,
+            y: -0.35,
+            x: 0.5,
+            xanchor: 'center' as const,
           },
         }}
         config={{
