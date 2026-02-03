@@ -46,21 +46,22 @@ export interface NetworkParams {
 // API Response Types
 // ============================================================================
 
+// API returns SimulationResponse which IS the simulation state
 export interface SimulationState {
   node_pressures: Record<number, number>;
   node_actual_demand: Record<number, number>;
   pipe_flow_rates: Record<number, number>;
-  pipe_velocities?: Record<number, number>;
-  pipe_pressure_drops?: Record<number, number>;
-  pipe_reynolds?: Record<number, number>;
-  active_leaks?: Record<number, number>;
-  warnings?: string[];
+  pipe_velocities: Record<number, number>;
+  pipe_pressure_drops: Record<number, number>;
+  pipe_reynolds: Record<number, number>;
+  active_leaks: Record<number, number>; // node_id -> leak_rate
+  warnings: string[];
 }
 
+// GET /api/network returns this
 export interface NetworkResponse {
-  network: Network;
-  simulation_state: SimulationState;
-  active_leaks: number[];
+  nodes: Node[];
+  pipes: Pipe[];
 }
 
 // ============================================================================
@@ -70,12 +71,11 @@ export interface NetworkResponse {
 export interface SimulationRequest {
   source_pressure?: number;
   demand_multiplier?: number;
+  active_leaks?: number[];
 }
 
-export interface SimulationResponse {
-  simulation_state: SimulationState;
-  active_leaks: number[];
-}
+// POST /api/simulate returns SimulationState directly
+export type SimulationResponse = SimulationState;
 
 // ============================================================================
 // Leak Detection Types

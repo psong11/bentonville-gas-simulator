@@ -18,6 +18,7 @@ import {
 
 import {
   useNetwork,
+  useSimulation,
   useGenerateNetwork,
   useRunSimulation,
   useLeakDetection,
@@ -25,7 +26,7 @@ import {
   useClearLeaks,
 } from './hooks/useApi';
 
-import type { NetworkParams, LeakDetectionResult } from './types';
+import type { NetworkParams, LeakDetectionResult, SimulationState } from './types';
 
 // Create QueryClient instance
 const queryClient = new QueryClient({
@@ -37,6 +38,18 @@ const queryClient = new QueryClient({
   },
 });
 
+// Default empty simulation state
+const defaultSimulationState: SimulationState = {
+  node_pressures: {},
+  pipe_flow_rates: {},
+  node_actual_demand: {},
+  pipe_velocities: {},
+  pipe_pressure_drops: {},
+  pipe_reynolds: {},
+  active_leaks: {},
+  warnings: [],
+};
+
 function SimulatorApp() {
   // State
   const [sourcePressure, setSourcePressure] = useState(500);
@@ -46,22 +59,23 @@ function SimulatorApp() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // TanStack Query hooks
+  // TanStack Query hooks - network and simulation are separate
   const { data: networkData, isLoading: isLoadingNetwork, error: networkError } = useNetwork();
+  const { data: simulationData } = useSimulation();
   const generateNetworkMutation = useGenerateNetwork();
   const runSimulationMutation = useRunSimulation();
   const detectLeaksMutation = useLeakDetection();
   const injectLeaksMutation = useInjectLeaks();
   const clearLeaksMutation = useClearLeaks();
 
-  // Extract data with defaults
-  const network = networkData?.network ?? { nodes: [], pipes: [] };
-  const simulationState = networkData?.simulation_state ?? {
-    node_pressures: {},
-    pipe_flow_rates: {},
-    node_actual_demand: {},
-  };
-  const activeLeaks = networkData?.active_leaks ?? [];
+  // Extract data with defaults - network comes from /api/network
+  const network = networkData ?? { nodes: [], pipes: [] };
+  // Simulation state comes from /api/simulation/state
+  const simulationState = simulationData ?? defaultSimulationState;
+  // Active leaks are node IDs where active_leaks[id] > 0
+  const activeLeaks = Object.entries(simulationState.active_leaks ?? {})
+    .filter(([_, rate]) => rate > 0)
+    .map(([id]) => parseInt(id));
 
   // WebSocket connection
   useEffect(() => {
@@ -80,9 +94,10 @@ function SimulatorApp() {
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          if (message.type === 'simulation_update' || message.type === 'leak_update') {
+          if (message.type === 'SIMULATION_UPDATE' || message.type === 'NETWORK_UPDATE' || message.type === 'LEAK_ALERT') {
             // Invalidate queries to refetch fresh data
             queryClient.invalidateQueries({ queryKey: ['network'] });
+            queryClient.invalidateQueries({ queryKey: ['simulation'] });
             setLastUpdate(new Date());
           }
         } catch (err) {
