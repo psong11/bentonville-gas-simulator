@@ -195,7 +195,7 @@ class AppState:
             warnings=[],
         )
     
-    def detect_leaks(self, strategy: str, num_sensors: int = 5) -> LeakDetectionResponse:
+    def detect_leaks(self, strategy: str, num_sensors: int = 5, sensor_node_ids: list[int] | None = None) -> LeakDetectionResponse:
         """Run leak detection with the specified strategy."""
         start_time = time.time()
         
@@ -235,8 +235,13 @@ class AppState:
         detection_rate = true_positives / len(actual_leaks) if actual_leaks else 0.0
         false_positive_rate = false_positives / len(detected_set) if detected_set else 0.0
         
-        # Sensor placements (use top nodes by connectivity as proxy)
-        sensor_placements = [n.id for n in self.nodes[:num_sensors] if n.node_type != 'source']
+        # Sensor placements - use provided IDs or default to top nodes by connectivity
+        if sensor_node_ids:
+            # Validate provided sensor node IDs exist and are non-source
+            valid_ids = {n.id for n in self.nodes if n.node_type != 'source'}
+            sensor_placements = [nid for nid in sensor_node_ids if nid in valid_ids]
+        else:
+            sensor_placements = [n.id for n in self.nodes[:num_sensors] if n.node_type != 'source']
         
         return LeakDetectionResponse(
             suspected_leaks=suspected,

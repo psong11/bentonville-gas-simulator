@@ -211,7 +211,7 @@ async def get_simulation_state():
 @app.post("/api/leaks/detect", response_model=LeakDetectionResponse, tags=["Leaks"])
 async def detect_leaks(request: LeakDetectionRequest):
     """Run leak detection with the specified strategy."""
-    return app_state.detect_leaks(request.strategy.value, request.num_sensors)
+    return app_state.detect_leaks(request.strategy.value, request.num_sensors, request.sensor_node_ids)
 
 
 @app.post("/api/leaks/inject", response_model=InjectLeaksResponse, tags=["Leaks"])

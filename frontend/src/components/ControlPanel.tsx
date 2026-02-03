@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { RotateCcw, Play, Settings, Loader2 } from 'lucide-react';
+import { RotateCcw, Settings, Loader2 } from 'lucide-react';
 import type { NetworkParams } from '../types';
 
 interface ControlPanelProps {
@@ -12,9 +12,7 @@ interface ControlPanelProps {
   demandMultiplier: number;
   onSourcePressureChange: (pressure: number) => void;
   onDemandMultiplierChange: (multiplier: number) => void;
-  onRunSimulation: () => void;
   onGenerateNetwork: (params: NetworkParams) => void;
-  isSimulating: boolean;
   isGenerating: boolean;
 }
 
@@ -23,9 +21,7 @@ export function ControlPanel({
   demandMultiplier,
   onSourcePressureChange,
   onDemandMultiplierChange,
-  onRunSimulation,
   onGenerateNetwork,
-  isSimulating,
   isGenerating,
 }: ControlPanelProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -115,25 +111,6 @@ export function ControlPanel({
           <span>2.0x (peak)</span>
         </div>
       </div>
-
-      {/* Run Simulation Button */}
-      <button
-        onClick={onRunSimulation}
-        disabled={isSimulating}
-        className="btn btn-primary w-full flex items-center justify-center gap-2"
-      >
-        {isSimulating ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Simulating...
-          </>
-        ) : (
-          <>
-            <Play className="w-4 h-4" />
-            Run Simulation
-          </>
-        )}
-      </button>
 
       {/* Advanced Settings Toggle */}
       <button

@@ -66,12 +66,14 @@ export async function getSimulationState(): Promise<SimulationResponse> {
 
 export interface DetectLeaksParams {
   num_sensors: number;
+  sensor_node_ids?: number[];
 }
 
 export async function detectLeaks(params: DetectLeaksParams): Promise<LeakDetectionResult> {
   const response = await client.post<LeakDetectionResult>('/leaks/detect', {
     strategy: 'combined',
     num_sensors: params.num_sensors,
+    sensor_node_ids: params.sensor_node_ids,
   });
   return response.data;
 }
