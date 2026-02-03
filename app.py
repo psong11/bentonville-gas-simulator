@@ -233,6 +233,8 @@ def initialize_session_state():
         st.session_state.demand_multiplier = 1.0
     if 'selected_pipe_id' not in st.session_state:
         st.session_state.selected_pipe_id = None
+    if 'last_processed_click' not in st.session_state:
+        st.session_state.last_processed_click = None
 
 
 def load_or_generate_network(force_regenerate: bool = False, n_nodes: int = DEFAULT_NODES):
@@ -1001,6 +1003,8 @@ def main():
             )
             if st.button("Clear Selection", key="clear_pipe_selection"):
                 st.session_state.selected_pipe_id = None
+                # Mark this click as already processed so stale data won't retrigger
+                # (last_processed_click is set in the click handler below)
                 st.rerun()
     
     # Map
@@ -1025,13 +1029,22 @@ def main():
             key="flow_chart_events"
         )
         
-        # Handle click events
+        # Handle click events - only process genuinely NEW clicks
         if selected_points:
-            point_index = selected_points[0].get('pointIndex')
-            if point_index is not None and point_index < len(top_flows):
-                clicked_pipe_id = top_flows[point_index]['pipe_id']
-                if clicked_pipe_id != st.session_state.selected_pipe_id:
+            # Create a signature to identify this click event
+            click_signature = (
+                selected_points[0].get('pointIndex'),
+                selected_points[0].get('x'),
+                selected_points[0].get('y')
+            )
+            
+            # Only process if this is different from the last click we handled
+            if click_signature != st.session_state.last_processed_click:
+                point_index = selected_points[0].get('pointIndex')
+                if point_index is not None and point_index < len(top_flows):
+                    clicked_pipe_id = top_flows[point_index]['pipe_id']
                     st.session_state.selected_pipe_id = clicked_pipe_id
+                    st.session_state.last_processed_click = click_signature
                     st.rerun()
     
     # Node details table
