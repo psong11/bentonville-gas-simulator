@@ -6,13 +6,21 @@ networkx>=3.0
 numpy>=1.24.0
 pandas>=2.0.0
 
-# Visualization & UI
+# Visualization & UI (Streamlit - legacy, will be removed in Phase 4)
 streamlit>=1.28.0
 plotly>=5.18.0
+
+# FastAPI Backend (Phase 1+)
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+websockets>=12.0
 
 # Note: These are the only required libraries as specified.
 # The application uses:
 # - networkx for graph operations and network analysis
 # - numpy/pandas for numerical computation and data handling
-# - streamlit for the web UI
+# - streamlit for the web UI (legacy)
 # - plotly for interactive visualizations
+# - fastapi for REST + WebSocket API
+# - uvicorn as ASGI server
