@@ -14,7 +14,9 @@ import {
   ControlPanel,
   LeakDetection,
   StatusBar,
+  ToastContainer,
 } from './components';
+import type { ToastMessage } from './components';
 
 import {
   useNetwork,
@@ -58,6 +60,17 @@ function SimulatorApp() {
   const [demandMultiplier, setDemandMultiplier] = useState(1.0);
   const [selectedPipeId, setSelectedPipeId] = useState<number | null>(null);
   const [detectionResult, setDetectionResult] = useState<LeakDetectionResult | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Toast helpers
+  const addToast = useCallback((type: ToastMessage['type'], title: string, message?: string) => {
+    const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    setToasts(prev => [...prev, { id, type, title, message }]);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
 
   // WebSocket for real-time updates
   const { isConnected: wsConnected, lastUpdate, setPressure: wsPressure, setDemandMultiplier: wsDemand } = useWebSocket();
@@ -95,59 +108,107 @@ function SimulatorApp() {
 
   // Handlers
   const handleRunSimulation = useCallback(() => {
+    if (network.nodes.length === 0) {
+      addToast('warning', 'No Network Loaded', 'Generate or load a network first before running simulation.');
+      return;
+    }
     runSimulationMutation.mutate(
       { source_pressure: sourcePressure, demand_multiplier: demandMultiplier },
-      {}
+      {
+        onSuccess: (data) => {
+          const warnings = data.warnings?.length ?? 0;
+          if (warnings > 0) {
+            addToast('warning', 'Simulation Complete', `Completed with ${warnings} warning(s). Check pressure levels.`);
+          } else {
+            addToast('success', 'Simulation Complete', 'Network pressures and flows updated successfully.');
+          }
+        },
+        onError: (error) => {
+          addToast('error', 'Simulation Failed', error instanceof Error ? error.message : 'An unexpected error occurred.');
+        },
+      }
     );
-  }, [sourcePressure, demandMultiplier, runSimulationMutation]);
+  }, [sourcePressure, demandMultiplier, runSimulationMutation, network.nodes.length, addToast]);
 
   const handleGenerateNetwork = useCallback(
     (params: NetworkParams) => {
       generateNetworkMutation.mutate(params, {
-        onSuccess: () => {
+        onSuccess: (data) => {
           setSelectedPipeId(null);
           setDetectionResult(null);
+          const nodeCount = data.nodes?.length ?? 0;
+          const pipeCount = data.pipes?.length ?? 0;
+          addToast('success', 'Network Generated', `Created ${nodeCount} nodes and ${pipeCount} pipes.`);
+        },
+        onError: (error) => {
+          addToast('error', 'Generation Failed', error instanceof Error ? error.message : 'Failed to generate network.');
         },
       });
     },
-    [generateNetworkMutation]
+    [generateNetworkMutation, addToast]
   );
 
   const handleInjectLeaks = useCallback(
     (nodeIds: number[]) => {
+      if (nodeIds.length === 0) {
+        addToast('warning', 'No Nodes Selected', 'Select at least one node to inject leaks.');
+        return;
+      }
       injectLeaksMutation.mutate(
         { node_ids: nodeIds },
         {
           onSuccess: () => {
             setDetectionResult(null);
+            addToast('success', 'Leaks Injected', `${nodeIds.length} leak(s) injected into the network. Run detection to find them.`);
+          },
+          onError: (error) => {
+            addToast('error', 'Injection Failed', error instanceof Error ? error.message : 'Failed to inject leaks.');
           },
         }
       );
     },
-    [injectLeaksMutation]
+    [injectLeaksMutation, addToast]
   );
 
   const handleDetectLeaks = useCallback(
     (numSensors: number) => {
+      if (activeLeaks.length === 0) {
+        addToast('warning', 'No Active Leaks', 'Inject leaks first before running detection.');
+        return;
+      }
       detectLeaksMutation.mutate(
         { num_sensors: numSensors },
         {
           onSuccess: (data) => {
             setDetectionResult(data);
+            const detected = data.detected_leaks?.length ?? 0;
+            const rate = ((data.detection_rate ?? 0) * 100).toFixed(0);
+            if (detected > 0) {
+              addToast('success', 'Leaks Detected', `Found ${detected} leak(s) with ${rate}% detection rate.`);
+            } else {
+              addToast('warning', 'No Leaks Detected', 'Detection algorithm could not locate any leaks. Try adding more sensors.');
+            }
+          },
+          onError: (error) => {
+            addToast('error', 'Detection Failed', error instanceof Error ? error.message : 'Failed to run leak detection.');
           },
         }
       );
     },
-    [detectLeaksMutation]
+    [detectLeaksMutation, activeLeaks.length, addToast]
   );
 
   const handleClearLeaks = useCallback(() => {
     clearLeaksMutation.mutate(undefined, {
       onSuccess: () => {
         setDetectionResult(null);
+        addToast('info', 'Leaks Cleared', 'All active leaks have been removed from the network.');
+      },
+      onError: (error) => {
+        addToast('error', 'Clear Failed', error instanceof Error ? error.message : 'Failed to clear leaks.');
       },
     });
-  }, [clearLeaksMutation]);
+  }, [clearLeaksMutation, addToast]);
 
   const handlePipeSelect = useCallback((pipeId: number | null) => {
     setSelectedPipeId(pipeId);
@@ -287,6 +348,9 @@ function SimulatorApp() {
       <footer className="bg-white border-t border-slate-200 px-6 py-3 text-center text-sm text-slate-500">
         Bentonville Gas Distribution Network Simulator • Darcy-Weisbach Physics Engine
       </footer>
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }
