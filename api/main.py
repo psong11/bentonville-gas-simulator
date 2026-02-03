@@ -2,13 +2,16 @@
 FastAPI Main Application
 ========================
 Entry point for the API server with CORS, routes, and WebSocket support.
+Phase 6: Now with PostgreSQL persistence.
 """
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from typing import List, Set
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession
 import json
 
 from api.schemas import (
@@ -28,6 +31,7 @@ from api.schemas import (
     WSMessageType,
 )
 from api.state import AppState
+from api.database import init_db, close_db, get_db
 
 
 # ============================================================================
@@ -91,12 +95,28 @@ manager = ConnectionManager()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown events."""
-    # Startup: Load existing network if available
+    # Startup: Initialize database and load network
     print("🚀 Starting Bentonville Gas Simulator API...")
+    
+    # Initialize PostgreSQL connection pool
+    use_db = os.getenv("USE_DATABASE", "false").lower() == "true"
+    if use_db:
+        try:
+            await init_db()
+            print("✅ PostgreSQL database connected")
+        except Exception as e:
+            print(f"⚠️ Database connection failed: {e}")
+            print("   Falling back to file-based storage")
+    
+    # Load existing network from file (legacy mode)
     app_state.load_network_if_exists()
+    
     yield
-    # Shutdown
+    
+    # Shutdown: Close database connections
     print("👋 Shutting down API...")
+    if use_db:
+        await close_db()
 
 
 # ============================================================================

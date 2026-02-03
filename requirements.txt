@@ -16,6 +16,12 @@ uvicorn[standard]>=0.27.0
 pydantic>=2.5.0
 websockets>=12.0
 
+# Database (Phase 6)
+sqlalchemy>=2.0.0
+asyncpg>=0.29.0
+alembic>=1.13.0
+psycopg2-binary>=2.9.0
+
 # Note: These are the only required libraries as specified.
 # The application uses:
 # - networkx for graph operations and network analysis
@@ -24,3 +30,5 @@ websockets>=12.0
 # - plotly for interactive visualizations
 # - fastapi for REST + WebSocket API
 # - uvicorn as ASGI server
+# - sqlalchemy + asyncpg for PostgreSQL persistence
+# - alembic for database migrations
