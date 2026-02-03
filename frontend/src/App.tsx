@@ -338,6 +338,7 @@ function SimulatorApp() {
                 selectedPipeId={selectedPipeId}
                 onPipeSelect={handlePipeSelect}
                 activeLeaks={activeLeaks}
+                detectionResult={detectionResult}
               />
               {selectedPipeId !== null && (
                 <div className="mt-2 flex items-center justify-between">
