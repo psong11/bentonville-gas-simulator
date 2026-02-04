@@ -112,11 +112,20 @@ export function useWebSocket(): UseWebSocketReturn {
   useEffect(() => {
     const connect = () => {
       // Determine WebSocket URL
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.hostname;
-      // In dev, connect directly to backend; in prod, use same host
-      const port = import.meta.env.DEV ? '8000' : window.location.port;
-      const wsUrl = `${protocol}//${host}:${port}/ws`;
+      // In production: use VITE_WS_URL environment variable (Railway backend)
+      // In development: auto-detect based on current location
+      let wsUrl: string;
+      
+      if (import.meta.env.VITE_WS_URL) {
+        // Production: use configured WebSocket URL
+        wsUrl = `${import.meta.env.VITE_WS_URL}/ws`;
+      } else {
+        // Development: connect to local backend
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.hostname;
+        const port = import.meta.env.DEV ? '8000' : window.location.port;
+        wsUrl = `${protocol}//${host}:${port}/ws`;
+      }
       
       console.log('Connecting to WebSocket:', wsUrl);
       const ws = new WebSocket(wsUrl);

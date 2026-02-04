@@ -49,3 +49,17 @@ Thumbs.db
 node_modules/
 .next/
 out/
+# Environment files (keep .example files)
+.env
+.env.local
+.env.production
+.env.*.local
+!.env.example
+!.env.development
+!.env.production.example
+!frontend/.env.example
+!frontend/.env.development
+!frontend/.env.production.example
+
+# Vercel
+.vercel
