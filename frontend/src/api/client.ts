@@ -15,8 +15,12 @@ import type {
   ClearLeaksResult,
 } from '../types';
 
-// API base URL - uses Vite proxy in dev, direct in production
-const API_BASE = '/api';
+// API base URL configuration
+// - In development: uses Vite proxy (/api -> localhost:8000)
+// - In production: uses VITE_API_URL environment variable (Railway backend)
+const API_BASE = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : '/api';
 
 const client = axios.create({
   baseURL: API_BASE,

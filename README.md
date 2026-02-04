@@ -221,7 +221,73 @@ cd frontend && npm run type-check
 cd frontend && npm run build
 ```
 
-## 📜 License
+## � Deployment (Vercel + Railway)
+
+This app is designed for a split deployment: **Frontend on Vercel**, **Backend on Railway**.
+
+### Step 1: Deploy Backend to Railway
+
+1. **Create Railway Account**: Go to [railway.app](https://railway.app) and sign up
+2. **New Project**: Click "New Project" → "Deploy from GitHub repo"
+3. **Select Repository**: Choose your `bentonville_gas_simulator` repo
+4. **Configure Environment Variables** in Railway Dashboard:
+   ```
+   ALLOWED_ORIGINS=https://your-app.vercel.app
+   USE_DATABASE=false
+   ```
+5. **Get Your Backend URL**: After deployment, Railway provides a URL like:
+   ```
+   https://bentonville-gas-simulator-production.up.railway.app
+   ```
+
+### Step 2: Deploy Frontend to Vercel
+
+1. **Create Vercel Account**: Go to [vercel.com](https://vercel.com) and sign up
+2. **Import Project**: Click "Add New" → "Project" → Import your GitHub repo
+3. **Configure Project**:
+   - **Framework Preset**: Vite
+   - **Root Directory**: `frontend`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+4. **Add Environment Variables**:
+   ```
+   VITE_API_URL=https://your-railway-app.up.railway.app
+   VITE_WS_URL=wss://your-railway-app.up.railway.app
+   ```
+5. **Deploy**: Click "Deploy"
+
+### Step 3: Update Railway CORS
+
+After getting your Vercel URL, update the `ALLOWED_ORIGINS` in Railway:
+```
+ALLOWED_ORIGINS=https://your-app.vercel.app,https://your-custom-domain.com
+```
+
+### Environment Variables Reference
+
+**Backend (Railway):**
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ALLOWED_ORIGINS` | Yes | Comma-separated Vercel URLs for CORS |
+| `USE_DATABASE` | No | Set `true` to enable PostgreSQL |
+| `DATABASE_URL` | No | PostgreSQL connection string |
+
+**Frontend (Vercel):**
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_API_URL` | Yes | Railway backend URL (https://...) |
+| `VITE_WS_URL` | Yes | Railway WebSocket URL (wss://...) |
+
+### Troubleshooting Deployment
+
+| Issue | Solution |
+|-------|----------|
+| CORS errors | Verify `ALLOWED_ORIGINS` includes your Vercel URL |
+| WebSocket won't connect | Ensure `VITE_WS_URL` uses `wss://` (not `ws://`) |
+| API 404 errors | Check `VITE_API_URL` matches Railway URL exactly |
+| Build fails on Vercel | Ensure Root Directory is set to `frontend` |
+
+## �📜 License
 
 MIT License - Built for educational and planning purposes.
 
