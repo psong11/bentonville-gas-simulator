@@ -81,6 +81,8 @@ export function useLeakDetection() {
     mutationFn: (params: { num_sensors: number; sensor_node_ids?: number[] }) => api.detectLeaks(params),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.leakDetection, data);
+      // Invalidate simulation query to refresh UI with latest pressure data
+      queryClient.invalidateQueries({ queryKey: queryKeys.simulation });
     },
   });
 }

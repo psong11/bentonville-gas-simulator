@@ -199,8 +199,9 @@ class AppState:
         """Run leak detection with the specified strategy."""
         start_time = time.time()
         
-        if self._simulation_state is None:
-            self._run_simulation_internal()
+        # Always run fresh simulation before detection to ensure we have
+        # the latest pressure data reflecting any active leaks
+        self._run_simulation_internal()
         
         # Run detection using the analyze_network method
         result = self.leak_detector.analyze_network(

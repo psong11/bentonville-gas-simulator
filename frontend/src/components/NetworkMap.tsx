@@ -99,7 +99,7 @@ export function NetworkMap({
       },
       text: sourceNodes.map(n => n.name),
       hovertemplate: sourceNodes.map(n => getHoverText(n) + '<extra></extra>'),
-      name: '⭐ Source',
+      name: 'Source',
       showlegend: true,
     } : null;
     
@@ -111,11 +111,11 @@ export function NetworkMap({
       lat: leakNodes.map(n => n.y),
       marker: {
         size: 22,
-        color: '#ef4444', // red for leaks
+        color: '#000000', // red for leaks
       },
       text: leakNodes.map(n => n.name),
       hovertemplate: leakNodes.map(n => getHoverText(n) + '<extra></extra>'),
-      name: '🚨 Leak',
+      name: 'Leak',
       showlegend: true,
     } : null;
     
