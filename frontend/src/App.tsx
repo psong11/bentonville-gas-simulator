@@ -312,10 +312,10 @@ function SimulatorApp() {
       />
 
       {/* Main Content */}
-      <main className="flex-1 p-6">
-        <div className="grid grid-cols-12 gap-6">
-          {/* Left Sidebar - Controls */}
-          <div className="col-span-3 space-y-6">
+      <main className="flex-1 p-6 overflow-hidden">
+        <div className="grid grid-cols-12 gap-6 h-full">
+          {/* Left Sidebar - Controls (independently scrollable) */}
+          <div className="col-span-3 space-y-6 overflow-y-auto max-h-[calc(100vh-200px)] pr-2">
             <LeakDetection
               network={network}
               activeLeaks={activeLeaks}
