@@ -74,11 +74,9 @@ export function NetworkMap({
       return 14;
     });
 
-    const symbols = network.nodes.map(node => {
-      if (activeLeaks.includes(node.id)) return 'x';
-      if (node.node_type === 'source') return 'star';
-      return 'circle';
-    });
+    // Note: For scattermapbox, marker.color and marker.size only work with 'circle' symbol
+    // Other symbols like 'star' don't support color/size arrays
+    // So we use 'circle' for all nodes to ensure they render with proper colors
 
     const hoverText = network.nodes.map(node => {
       const pressure = simulationState.node_pressures[node.id] ?? 0;
@@ -101,7 +99,7 @@ export function NetworkMap({
       marker: {
         size: sizes,
         color: colors,
-        symbol: symbols,
+        // Use 'circle' for all - it's the only symbol that supports color/size arrays
       },
       text: network.nodes.map(n => n.name),
       hovertemplate: hoverText.map(t => t + '<extra></extra>'),
@@ -128,7 +126,7 @@ export function NetworkMap({
       marker: {
         size: 18,
         color: '#3b82f6', // blue
-        symbol: 'triangle',
+        // Use circle - only symbol that supports color/size arrays
       },
       hovertemplate: sensorNodeData.map(n => 
         `<b>📡 Sensor</b><br>${n.name}<extra></extra>`
@@ -185,7 +183,7 @@ export function NetworkMap({
         marker: {
           size: 20,
           color: '#ef4444', // red
-          symbol: 'circle-open',
+          // Use circle - 'circle-open' doesn't work well
         },
         hovertemplate: fpNodes.map(n => 
           `<b>❌ False Positive</b><br>${n.name}<extra></extra>`
@@ -210,7 +208,7 @@ export function NetworkMap({
         marker: {
           size: 18,
           color: '#3b82f6', // blue
-          symbol: 'triangle',
+          // Use circle - only symbol that supports color/size arrays
         },
         hovertemplate: sensorNodeData.map(n => 
           `<b>📡 Sensor</b><br>${n.name}<extra></extra>`
