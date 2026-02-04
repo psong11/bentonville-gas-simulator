@@ -293,22 +293,36 @@ class PhysicsEngine:
                 demand = state.node_actual_demand[node.id]
                 
                 if connected_pressures:
-                    # Pressure should be slightly below average of neighbors
-                    avg_neighbor_pressure = np.mean(connected_pressures)
+                    # Use max neighbor pressure as the upstream source
                     max_neighbor_pressure = max(connected_pressures)
                     
-                    # Demand reduces pressure
-                    demand_factor = demand / max(demand + 10, 1)
+                    # Calculate realistic pressure drop based on:
+                    # 1. Distance from source (approximated by graph distance)
+                    # 2. Local demand (small effect)
+                    # 3. Pipe characteristics
                     
-                    # Leak drastically reduces pressure
+                    # In real gas networks, pressure drops are typically 1-3% per km
+                    # For our simulation, use a much smaller drop factor
+                    # Base drop: 0.5-2% below highest neighbor pressure
+                    base_drop_factor = 0.005  # 0.5% base drop per hop
+                    
+                    # Demand effect is very small in real networks (pressure is maintained)
+                    # Only high demand should noticeably affect pressure
+                    demand_effect = min(demand / 1000, 0.02)  # Max 2% effect from demand
+                    
+                    # Total pressure drop factor (capped at 5% per hop for realism)
+                    drop_factor = min(base_drop_factor + demand_effect, 0.05)
+                    
+                    # Leak drastically reduces pressure at leak location
                     if node.id in leaks:
                         leak_severity = min(leaks[node.id] / 100, 0.9)
                         new_pressure = max_neighbor_pressure * (1 - leak_severity) * 0.3
                     else:
-                        new_pressure = avg_neighbor_pressure * (1 - demand_factor * 0.1)
+                        # New pressure is slightly below the max neighbor pressure
+                        new_pressure = max_neighbor_pressure * (1 - drop_factor)
                     
-                    # Relaxation for stability
-                    alpha = 0.3
+                    # Relaxation for stability (higher alpha for faster convergence)
+                    alpha = 0.5
                     state.node_pressures[node.id] = (
                         alpha * new_pressure + 
                         (1 - alpha) * state.node_pressures[node.id]
