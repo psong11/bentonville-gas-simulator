@@ -72,12 +72,20 @@ export function NetworkMap({
         `Status: ${status}${leakText}`;
     };
     
-    // Helper to get color for regular nodes
+    // Helper to get color for regular nodes (muted/pastel versions)
     const getNodeColor = (node: Node) => {
-      if (!hasSimulationData) return '#1f2937';
+      if (!hasSimulationData) return '#9ca3af'; // muted gray during loading
       const pressure = simulationState.node_pressures[node.id] ?? 0;
       const status = getPressureStatus(pressure, sourcePressure);
-      return getPressureColor(status);
+      // Use muted/pastel versions for regular nodes so they don't compete with
+      // source, leaks, sensors, and detected leaks
+      const mutedColors: Record<string, string> = {
+        critical: '#fca5a5', // muted red (red-300)
+        warning: '#fcd34d',  // muted amber (amber-300)
+        normal: '#86efac',   // muted green (green-300)
+        over: '#d8b4fe',     // muted purple (purple-300)
+      };
+      return mutedColors[status] ?? '#9ca3af';
     };
     
     // Helper to get size for regular nodes
@@ -191,7 +199,7 @@ export function NetworkMap({
         lat: tpNodes.map(n => n.y),
         marker: {
           size: 24,
-          color: '#b60000', // green
+          color: '#ff0000', // green
           symbol: 'circle',
         },
         hovertemplate: tpNodes.map(n => 
