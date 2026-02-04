@@ -68,6 +68,8 @@ export function NetworkMap({
     });
 
     const sizes = network.nodes.map(node => {
+      // Leak nodes should be larger and more visible
+      if (activeLeaks.includes(node.id)) return 22;
       if (node.node_type === 'source') return 28;
       if (node.node_type === 'industrial') return 20;
       if (node.node_type === 'commercial') return 16;
