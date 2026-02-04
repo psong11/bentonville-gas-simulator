@@ -408,20 +408,6 @@ export function LeakDetection({
           )}
         </div>
 
-        {/* Random Leak Injection */}
-        <button
-          onClick={handleRandomLeaks}
-          disabled={isInjecting}
-          className="btn btn-secondary w-full flex items-center justify-center gap-2"
-        >
-          {isInjecting ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Plus className="w-4 h-4" />
-          )}
-          Inject {numLeaks} Random Leak{numLeaks > 1 ? 's' : ''}
-        </button>
-
         {/* Display active leak addresses */}
         {activeLeaks.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -444,6 +430,20 @@ export function LeakDetection({
             })}
           </div>
         )}
+
+        {/* Random Leak Injection */}
+        <button
+          onClick={handleRandomLeaks}
+          disabled={isInjecting}
+          className="btn btn-secondary w-full flex items-center justify-center gap-2"
+        >
+          {isInjecting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Plus className="w-4 h-4" />
+          )}
+          Inject {numLeaks} Random Leak{numLeaks > 1 ? 's' : ''}
+        </button>
 
         {/* Clear Leaks */}
         {activeLeaks.length > 0 && (
