@@ -313,6 +313,23 @@ export function LeakDetection({
           </div>
         )}
 
+        {/* Display active leak addresses */}
+        {activeLeaks.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {activeLeaks.map(nodeId => {
+              const node = network.nodes.find(n => n.id === nodeId);
+              return (
+                <span
+                  key={nodeId}
+                  className="badge bg-red-100 text-red-800 flex items-center gap-1"
+                >
+                  ⚠️ {node?.name || `Node ${nodeId}`}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
         {/* Leak Count Setting */}
         <div>
           <label className="label">Number of Leaks</label>

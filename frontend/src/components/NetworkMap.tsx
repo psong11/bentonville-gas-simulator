@@ -157,7 +157,7 @@ export function NetworkMap({
         lat: tpNodes.map(n => n.y),
         marker: {
           size: 24,
-          color: '#22c55e', // green
+          color: '#b60000', // green
           symbol: 'circle',
         },
         hovertemplate: tpNodes.map(n => 
@@ -182,7 +182,7 @@ export function NetworkMap({
         lat: fpNodes.map(n => n.y),
         marker: {
           size: 20,
-          color: '#ef4444', // red
+          color: '#cfc100', // red
           // Use circle - 'circle-open' doesn't work well
         },
         hovertemplate: fpNodes.map(n => 
