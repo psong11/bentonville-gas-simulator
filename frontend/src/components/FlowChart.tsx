@@ -44,12 +44,36 @@ export function FlowChart({
 
   // Create chart data
   const chartData = useMemo(() => {
+    // Helper to extract short label from node name (e.g., "123 Oak Street" -> "123 Oak St")
+    const getShortLabel = (node: Node | undefined, pipeId: number): string => {
+      if (!node) return `#${pipeId}`;
+      const name = node.name;
+      // For residential: "123 Oak Street" -> "123 Oak"
+      // For commercial: "Walmart Store #45" -> "Walmart #45"
+      // For industrial: "Distribution Center #12" -> "Dist Ctr #12"
+      const match = name.match(/^(\d+)\s+(.+)/);
+      if (match) {
+        // Residential format: "123 Oak Street" -> "#123 Oak"
+        const [, num, street] = match;
+        const shortStreet = street.split(' ')[0]; // Just first word
+        return `#${num} ${shortStreet}`;
+      }
+      // Commercial/Industrial: extract key word and number
+      const hashMatch = name.match(/(.+?)\s*#(\d+)/);
+      if (hashMatch) {
+        const [, prefix, num] = hashMatch;
+        const shortPrefix = prefix.split(' ')[0].slice(0, 8); // First word, max 8 chars
+        return `${shortPrefix} #${num}`;
+      }
+      return name.slice(0, 12);
+    };
+
     const labels = topPipes.map(({ pipe }) => {
       const source = nodeDict[pipe.source_id];
       const target = nodeDict[pipe.target_id];
-      return source && target 
-        ? `${source.name} → ${target.name}`
-        : `Pipe ${pipe.id}`;
+      const srcLabel = getShortLabel(source, pipe.id);
+      const tgtLabel = getShortLabel(target, pipe.id);
+      return `${srcLabel} → ${tgtLabel}`;
     });
 
     const values = topPipes.map(({ flowRate }) => flowRate);

@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { RotateCcw, Settings, Loader2 } from 'lucide-react';
+import { RotateCcw, Settings, Loader2, RefreshCw } from 'lucide-react';
 import type { NetworkParams } from '../types';
 
 interface ControlPanelProps {
@@ -13,6 +13,7 @@ interface ControlPanelProps {
   onSourcePressureChange: (pressure: number) => void;
   onDemandMultiplierChange: (multiplier: number) => void;
   onGenerateNetwork: (params: NetworkParams) => void;
+  onRefreshNetwork: () => void;
   isGenerating: boolean;
 }
 
@@ -22,6 +23,7 @@ export function ControlPanel({
   onSourcePressureChange,
   onDemandMultiplierChange,
   onGenerateNetwork,
+  onRefreshNetwork,
   isGenerating,
 }: ControlPanelProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -86,7 +88,7 @@ export function ControlPanel({
         />
         <div className="flex justify-between text-xs text-slate-500 mt-1">
           <span>200 kPa</span>
-          <span>500 kPa (default)</span>
+          <span>600 kPa (default)</span>
           <span>800 kPa</span>
         </div>
       </div>
@@ -111,6 +113,15 @@ export function ControlPanel({
           <span>2.0x (peak)</span>
         </div>
       </div>
+
+      {/* Refresh Network Button */}
+      <button
+        onClick={onRefreshNetwork}
+        className="btn btn-secondary w-full flex items-center justify-center gap-2"
+      >
+        <RefreshCw className="w-4 h-4" />
+        Refresh Network
+      </button>
 
       {/* Advanced Settings Toggle */}
       <button

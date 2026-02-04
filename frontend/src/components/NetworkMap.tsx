@@ -49,32 +49,17 @@ export function NetworkMap({
     };
   }, [network.nodes]);
 
-  // Create node trace
-  const nodeTrace = useMemo(() => {
-    const colors = network.nodes.map(node => {
-      // Check if node has active leak
-      if (activeLeaks.includes(node.id)) return '#ef4444'; // red for leak
-      
-      // Color by pressure status
-      const pressure = simulationState.node_pressures[node.id] ?? 0;
-      const status = getPressureStatus(pressure, sourcePressure);
-      return getPressureColor(status);
-    });
-
-    const sizes = network.nodes.map(node => {
-      if (node.node_type === 'source') return 28;
-      if (node.node_type === 'industrial') return 20;
-      if (node.node_type === 'commercial') return 16;
-      return 14;
-    });
-
-    const symbols = network.nodes.map(node => {
-      if (activeLeaks.includes(node.id)) return 'x';
-      if (node.node_type === 'source') return 'star';
-      return 'circle';
-    });
-
-    const hoverText = network.nodes.map(node => {
+  // Create separate traces for different node types (for legend support)
+  const { sourceTrace, leakTrace, regularNodeTrace } = useMemo(() => {
+    const hasSimulationData = Object.keys(simulationState.node_pressures).length > 0;
+    
+    // Separate nodes into categories
+    const sourceNodes = network.nodes.filter(n => n.node_type === 'source');
+    const leakNodes = network.nodes.filter(n => activeLeaks.includes(n.id) && n.node_type !== 'source');
+    const regularNodes = network.nodes.filter(n => !activeLeaks.includes(n.id) && n.node_type !== 'source');
+    
+    // Helper to create hover text
+    const getHoverText = (node: Node) => {
       const pressure = simulationState.node_pressures[node.id] ?? 0;
       const demand = simulationState.node_actual_demand[node.id] ?? 0;
       const status = getPressureStatus(pressure, sourcePressure);
@@ -85,22 +70,83 @@ export function NetworkMap({
         `Pressure: ${pressure.toFixed(1)} kPa<br>` +
         `Demand: ${demand.toFixed(1)} m³/h<br>` +
         `Status: ${status}${leakText}`;
-    });
-
-    return {
+    };
+    
+    // Helper to get color for regular nodes (muted/pastel versions)
+    const getNodeColor = (node: Node) => {
+      if (!hasSimulationData) return '#9ca3af'; // muted gray during loading
+      const pressure = simulationState.node_pressures[node.id] ?? 0;
+      const status = getPressureStatus(pressure, sourcePressure);
+      // Use muted/pastel versions for regular nodes so they don't compete with
+      // source, leaks, sensors, and detected leaks
+      const mutedColors: Record<string, string> = {
+        critical: '#fca5a5', // muted red (red-300)
+        warning: '#fcd34d',  // muted amber (amber-300)
+        normal: '#86efac',   // muted green (green-300)
+        over: '#d8b4fe',     // muted purple (purple-300)
+      };
+      return mutedColors[status] ?? '#9ca3af';
+    };
+    
+    // Helper to get size for regular nodes
+    const getNodeSize = (node: Node) => {
+      if (node.node_type === 'industrial') return 20;
+      if (node.node_type === 'commercial') return 16;
+      return 14;
+    };
+    
+    // Source trace (green, always shown in legend)
+    const sourceTraceData = sourceNodes.length > 0 ? {
       type: 'scattermapbox' as const,
       mode: 'markers' as const,
-      lon: network.nodes.map(n => n.x),
-      lat: network.nodes.map(n => n.y),
+      lon: sourceNodes.map(n => n.x),
+      lat: sourceNodes.map(n => n.y),
       marker: {
-        size: sizes,
-        color: colors,
-        symbol: symbols,
+        size: 28,
+        color: '#22c55e', // green for source
       },
-      text: network.nodes.map(n => n.name),
-      hovertemplate: hoverText.map(t => t + '<extra></extra>'),
+      text: sourceNodes.map(n => n.name),
+      hovertemplate: sourceNodes.map(n => getHoverText(n) + '<extra></extra>'),
+      name: 'Source',
+      showlegend: true,
+    } : null;
+    
+    // Leak trace (red, shown in legend when leaks exist)
+    const leakTraceData = leakNodes.length > 0 ? {
+      type: 'scattermapbox' as const,
+      mode: 'markers' as const,
+      lon: leakNodes.map(n => n.x),
+      lat: leakNodes.map(n => n.y),
+      marker: {
+        size: 22,
+        color: '#000000', // red for leaks
+      },
+      text: leakNodes.map(n => n.name),
+      hovertemplate: leakNodes.map(n => getHoverText(n) + '<extra></extra>'),
+      name: 'Leak',
+      showlegend: true,
+    } : null;
+    
+    // Regular nodes trace (colored by pressure status)
+    const regularTraceData = regularNodes.length > 0 ? {
+      type: 'scattermapbox' as const,
+      mode: 'markers' as const,
+      lon: regularNodes.map(n => n.x),
+      lat: regularNodes.map(n => n.y),
+      marker: {
+        size: regularNodes.map(getNodeSize),
+        color: regularNodes.map(getNodeColor),
+      },
+      text: regularNodes.map(n => n.name),
+      hovertemplate: regularNodes.map(n => getHoverText(n) + '<extra></extra>'),
       name: 'Nodes',
       showlegend: false,
+    } : null;
+    
+    return {
+      sourceTrace: sourceTraceData,
+      leakTrace: leakTraceData,
+      regularNodeTrace: regularTraceData,
     };
   }, [network.nodes, simulationState, sourcePressure, activeLeaks]);
 
@@ -122,7 +168,7 @@ export function NetworkMap({
       marker: {
         size: 18,
         color: '#3b82f6', // blue
-        symbol: 'triangle',
+        // Use circle - only symbol that supports color/size arrays
       },
       hovertemplate: sensorNodeData.map(n => 
         `<b>📡 Sensor</b><br>${n.name}<extra></extra>`
@@ -153,7 +199,7 @@ export function NetworkMap({
         lat: tpNodes.map(n => n.y),
         marker: {
           size: 24,
-          color: '#22c55e', // green
+          color: '#ff0000', // green
           symbol: 'circle',
         },
         hovertemplate: tpNodes.map(n => 
@@ -178,8 +224,8 @@ export function NetworkMap({
         lat: fpNodes.map(n => n.y),
         marker: {
           size: 20,
-          color: '#ef4444', // red
-          symbol: 'circle-open',
+          color: '#cfc100', // red
+          // Use circle - 'circle-open' doesn't work well
         },
         hovertemplate: fpNodes.map(n => 
           `<b>❌ False Positive</b><br>${n.name}<extra></extra>`
@@ -204,7 +250,7 @@ export function NetworkMap({
         marker: {
           size: 18,
           color: '#3b82f6', // blue
-          symbol: 'triangle',
+          // Use circle - only symbol that supports color/size arrays
         },
         hovertemplate: sensorNodeData.map(n => 
           `<b>📡 Sensor</b><br>${n.name}<extra></extra>`
@@ -280,7 +326,12 @@ export function NetworkMap({
   // Build the complete data array
   const plotData = useMemo(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data: any[] = [...pipeTraces.filter(Boolean), nodeTrace];
+    const data: any[] = [...pipeTraces.filter(Boolean)];
+    
+    // Add node traces (source, leaks, regular) - filter out nulls
+    if (sourceTrace) data.push(sourceTrace);
+    if (leakTrace) data.push(leakTrace);
+    if (regularNodeTrace) data.push(regularNodeTrace);
     
     // Add sensor trace (if manually placed before detection)
     if (sensorTrace && !detectionResult) {
@@ -293,10 +344,10 @@ export function NetworkMap({
     }
     
     return data;
-  }, [pipeTraces, nodeTrace, sensorTrace, detectionResult, detectionTraces]);
+  }, [pipeTraces, sourceTrace, leakTrace, regularNodeTrace, sensorTrace, detectionResult, detectionTraces]);
 
-  // Determine if legend should be shown
-  const showLegend = Boolean((sensorTrace && !detectionResult) || (detectionResult && detectionTraces.length > 0));
+  // Determine if legend should be shown (show when we have source, leaks, sensors, or detection)
+  const showLegend = Boolean(sourceTrace || leakTrace || (sensorTrace && !detectionResult) || (detectionResult && detectionTraces.length > 0));
 
   return (
     <Plot
