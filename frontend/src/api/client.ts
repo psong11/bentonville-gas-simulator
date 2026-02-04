@@ -96,6 +96,23 @@ export async function clearLeaks(): Promise<ClearLeaksResult> {
 }
 
 // ============================================================================
+// Optimal Sensor Placement API
+// ============================================================================
+
+export interface OptimalSensorResult {
+  sensor_node_ids: number[];
+  coverage_percentage: number;
+  algorithm: string;
+}
+
+export async function getOptimalSensors(numSensors: number): Promise<OptimalSensorResult> {
+  const response = await client.post<OptimalSensorResult>('/sensors/optimal', {
+    num_sensors: numSensors,
+  });
+  return response.data;
+}
+
+// ============================================================================
 // Health Check
 // ============================================================================
 

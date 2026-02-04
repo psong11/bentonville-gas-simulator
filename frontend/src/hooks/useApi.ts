@@ -156,3 +156,13 @@ export function useClearLeaks() {
     },
   });
 }
+
+// ============================================================================
+// Optimal Sensor Placement Hooks
+// ============================================================================
+
+export function useOptimalSensors() {
+  return useMutation({
+    mutationFn: (numSensors: number) => api.getOptimalSensors(numSensors),
+  });
+}

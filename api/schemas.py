@@ -155,6 +155,18 @@ class InjectLeaksRequest(BaseModel):
     node_ids: Optional[List[int]] = Field(default=None, description="Specific node IDs to inject leaks into (overrides count if provided)")
 
 
+class OptimalSensorRequest(BaseModel):
+    """Request for optimal sensor placement using Greedy Dominating Set algorithm."""
+    num_sensors: int = Field(default=3, ge=1, le=20, description="Number of sensors to place optimally")
+
+
+class OptimalSensorResponse(BaseModel):
+    """Response with optimal sensor placements."""
+    sensor_node_ids: List[int] = Field(..., description="Optimally placed sensor node IDs")
+    coverage_percentage: float = Field(..., ge=0.0, le=100.0, description="Percentage of network covered")
+    algorithm: str = Field(default="greedy_dominating_set", description="Algorithm used for placement")
+
+
 class InjectLeaksResponse(BaseModel):
     """Response after injecting leaks."""
     injected_node_ids: List[int]

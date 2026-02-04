@@ -116,6 +116,16 @@ export interface ClearLeaksResult {
 }
 
 // ============================================================================
+// Optimal Sensor Placement Types
+// ============================================================================
+
+export interface OptimalSensorResult {
+  sensor_node_ids: number[];
+  coverage_percentage: number;
+  algorithm: string;
+}
+
+// ============================================================================
 // WebSocket Types
 // ============================================================================
 

@@ -98,6 +98,24 @@ body {
   box-shadow: 0 0 0 2px rgb(107 114 128 / 0.5);
 }
 
+.btn-orange {
+  background-color: rgb(249 115 22);
+  color: white;
+}
+
+.btn-orange:hover {
+  background-color: rgb(234 88 12);
+}
+
+.btn-orange:focus {
+  box-shadow: 0 0 0 2px rgb(249 115 22 / 0.5);
+}
+
+.btn-orange:disabled {
+  background-color: rgb(253 186 116);
+  cursor: not-allowed;
+}
+
 .btn-danger {
   background-color: rgb(220 38 38);
   color: white;

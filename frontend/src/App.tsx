@@ -25,6 +25,7 @@ import {
   useLeakDetection,
   useInjectLeaks,
   useClearLeaks,
+  useOptimalSensors,
 } from './hooks/useApi';
 
 import { useWebSocket } from './hooks/useWebSocket';
@@ -92,6 +93,7 @@ function SimulatorApp() {
   const detectLeaksMutation = useLeakDetection();
   const injectLeaksMutation = useInjectLeaks();
   const clearLeaksMutation = useClearLeaks();
+  const optimalSensorsMutation = useOptimalSensors();
 
   // Extract data with defaults - network comes from /api/network
   const network = networkData ?? { nodes: [], pipes: [] };
@@ -243,6 +245,24 @@ function SimulatorApp() {
     });
   }, [clearLeaksMutation, addToast]);
 
+  const handleGetOptimalSensors = useCallback(
+    async (numSensors: number) => {
+      try {
+        const result = await optimalSensorsMutation.mutateAsync(numSensors);
+        addToast(
+          'success', 
+          'Optimal Placement Complete', 
+          `Placed ${result.sensor_node_ids.length} sensors with ${result.coverage_percentage}% network coverage using Greedy Dominating Set algorithm.`
+        );
+        return result;
+      } catch (error) {
+        addToast('error', 'Optimization Failed', error instanceof Error ? error.message : 'Failed to calculate optimal placements.');
+        return { sensor_node_ids: [], coverage_percentage: 0 };
+      }
+    },
+    [optimalSensorsMutation, addToast]
+  );
+
   const handleRefreshNetwork = useCallback(() => {
     refetchNetwork();
     refetchSimulation();
@@ -297,7 +317,7 @@ function SimulatorApp() {
               Bentonville Gas Distribution Simulator
             </h1>
             <p className="text-sm text-slate-500">
-              Real-time network visualization with Darcy-Weisbach physics
+              Real-time network visualization with Darcy-Weisbach physics • Greedy Dominating Set algorithm for optimal sensor placement
             </p>
           </div>
         </div>
@@ -324,8 +344,10 @@ function SimulatorApp() {
               onDetectLeaks={handleDetectLeaks}
               onClearLeaks={handleClearLeaks}
               onSensorNodesChange={setSensorNodes}
+              onGetOptimalSensors={handleGetOptimalSensors}
               isDetecting={detectLeaksMutation.isPending}
               isInjecting={injectLeaksMutation.isPending}
+              isOptimizing={optimalSensorsMutation.isPending}
             />
             <ControlPanel
               sourcePressure={sourcePressure}

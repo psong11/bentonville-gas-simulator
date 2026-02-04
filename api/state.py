@@ -29,6 +29,7 @@ from api.schemas import (
     SimulationResponse,
     LeakDetectionResponse,
     InjectLeaksResponse,
+    OptimalSensorResponse,
     SuspectedLeak,
 )
 
@@ -333,3 +334,98 @@ class AppState:
         self.current_active_leaks = []
         if self._simulation_state:
             self._simulation_state.active_leaks = {}
+
+    def get_optimal_sensor_placements(self, num_sensors: int) -> OptimalSensorResponse:
+        """
+        Calculate optimal sensor placements using Greedy Dominating Set algorithm.
+        
+        The Greedy Dominating Set algorithm iteratively selects nodes that maximize
+        the number of uncovered nodes they can "dominate" (cover within detection range).
+        This provides near-optimal coverage for monitoring gas leak detection sensors.
+        
+        Time complexity: O(k * n * m) where k=sensors, n=nodes, m=edges
+        Approximation ratio: O(log n) from optimal
+        
+        Args:
+            num_sensors: Number of sensors to place
+            
+        Returns:
+            OptimalSensorResponse with sensor IDs and coverage percentage
+        """
+        if not self.nodes or not self.graph:
+            return OptimalSensorResponse(
+                sensor_node_ids=[],
+                coverage_percentage=0.0,
+                algorithm="greedy_dominating_set"
+            )
+        
+        # Get eligible nodes (non-source nodes)
+        eligible_nodes = [n for n in self.nodes if n.node_type != "source"]
+        eligible_ids = {n.id for n in eligible_nodes}
+        
+        if not eligible_ids:
+            return OptimalSensorResponse(
+                sensor_node_ids=[],
+                coverage_percentage=0.0,
+                algorithm="greedy_dominating_set"
+            )
+        
+        # Detection radius for sensors (same as used in detect_leaks)
+        SENSOR_DETECTION_RADIUS = 3  # hops in the network graph
+        
+        # Track which nodes are covered
+        covered_nodes: set[int] = set()
+        selected_sensors: list[int] = []
+        
+        # Precompute coverage for each potential sensor location
+        # coverage_map[node_id] = set of node_ids this node can cover
+        coverage_map: dict[int, set[int]] = {}
+        for node_id in eligible_ids:
+            try:
+                lengths = nx.single_source_shortest_path_length(
+                    self.graph, node_id, cutoff=SENSOR_DETECTION_RADIUS
+                )
+                # Only count eligible (non-source) nodes as coverable
+                coverage_map[node_id] = {n for n in lengths.keys() if n in eligible_ids}
+            except nx.NetworkXError:
+                coverage_map[node_id] = {node_id}
+        
+        # Greedy Dominating Set algorithm:
+        # At each step, select the node that covers the most uncovered nodes
+        for _ in range(min(num_sensors, len(eligible_ids))):
+            best_node = None
+            best_new_coverage = -1
+            
+            for node_id in eligible_ids:
+                if node_id in selected_sensors:
+                    continue
+                
+                # Calculate how many NEW nodes this sensor would cover
+                new_coverage = len(coverage_map[node_id] - covered_nodes)
+                
+                # Tie-breaker: prefer nodes with higher total coverage potential
+                # (more central nodes in the network)
+                if new_coverage > best_new_coverage or (
+                    new_coverage == best_new_coverage and 
+                    best_node is not None and
+                    len(coverage_map[node_id]) > len(coverage_map.get(best_node, set()))
+                ):
+                    best_node = node_id
+                    best_new_coverage = new_coverage
+            
+            if best_node is None or best_new_coverage == 0:
+                # No more useful sensors to place
+                break
+            
+            selected_sensors.append(best_node)
+            covered_nodes.update(coverage_map[best_node])
+        
+        # Calculate coverage percentage
+        total_eligible = len(eligible_ids)
+        coverage_percentage = (len(covered_nodes) / total_eligible * 100) if total_eligible > 0 else 0.0
+        
+        return OptimalSensorResponse(
+            sensor_node_ids=selected_sensors,
+            coverage_percentage=round(coverage_percentage, 1),
+            algorithm="greedy_dominating_set"
+        )

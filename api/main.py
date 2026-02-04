@@ -24,6 +24,8 @@ from api.schemas import (
     LeakDetectionResponse,
     InjectLeaksRequest,
     InjectLeaksResponse,
+    OptimalSensorRequest,
+    OptimalSensorResponse,
     NodeSchema,
     PipeSchema,
     SuspectedLeak,
@@ -244,6 +246,21 @@ async def clear_leaks():
     """Clear all active leaks."""
     app_state.clear_leaks()
     return {"status": "ok", "message": "All leaks cleared"}
+
+
+# ============================================================================
+# Optimal Sensor Placement Routes
+# ============================================================================
+
+@app.post("/api/sensors/optimal", response_model=OptimalSensorResponse, tags=["Sensors"])
+async def get_optimal_sensors(request: OptimalSensorRequest):
+    """
+    Calculate optimal sensor placements using the Greedy Dominating Set algorithm.
+    
+    This algorithm maximizes network coverage by iteratively selecting nodes
+    that cover the most uncovered neighbors within the sensor detection radius.
+    """
+    return app_state.get_optimal_sensor_placements(request.num_sensors)
 
 
 # ============================================================================

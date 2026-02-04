@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { AlertTriangle, Search, Plus, Trash2, Loader2 } from 'lucide-react';
+import { AlertTriangle, Search, Plus, Trash2, Loader2, Sparkles } from 'lucide-react';
 import type { Network, LeakDetectionResult } from '../types';
 
 interface LeakDetectionProps {
@@ -15,8 +15,10 @@ interface LeakDetectionProps {
   onDetectLeaks: (numSensors: number, sensorNodeIds?: number[]) => void;
   onClearLeaks: () => void;
   onSensorNodesChange: (nodeIds: number[]) => void;
+  onGetOptimalSensors: (numSensors: number) => Promise<{ sensor_node_ids: number[]; coverage_percentage: number }>;
   isDetecting: boolean;
   isInjecting: boolean;
+  isOptimizing: boolean;
 }
 
 export function LeakDetection({
@@ -27,12 +29,15 @@ export function LeakDetection({
   onDetectLeaks,
   onClearLeaks,
   onSensorNodesChange,
+  onGetOptimalSensors,
   isDetecting,
   isInjecting,
+  isOptimizing,
 }: LeakDetectionProps) {
   const [numLeaks, setNumLeaks] = useState(3);
   const [numSensors, setNumSensors] = useState(3);
   const [selectedNodes, setSelectedNodes] = useState<number[]>([]);
+  const [lastCoverage, setLastCoverage] = useState<number | null>(null);
   const [selectedSensorNodes, setSelectedSensorNodes] = useState<number[]>([]);
   const [sensorSearchTerm, setSensorSearchTerm] = useState('');
   const [showSensorDropdown, setShowSensorDropdown] = useState(false);
@@ -254,10 +259,35 @@ export function LeakDetection({
           
           {selectedSensorNodes.length === 0 && (
             <p className="text-xs text-slate-400 italic">
-              No manual placement — sensors will be auto-placed optimally.
+              No manual placement — use optimal or random placement below.
             </p>
           )}
         </div>
+
+        {/* Optimal Sensor Placement (Greedy Dominating Set) */}
+        <button
+          onClick={async () => {
+            const result = await onGetOptimalSensors(numSensors);
+            setSelectedSensorNodes(result.sensor_node_ids);
+            onSensorNodesChange(result.sensor_node_ids);
+            setLastCoverage(result.coverage_percentage);
+          }}
+          disabled={isOptimizing}
+          className="btn btn-orange w-full flex items-center justify-center gap-2"
+        >
+          {isOptimizing ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Sparkles className="w-4 h-4" />
+          )}
+          Place {numSensors} Optimized Sensor{numSensors > 1 ? 's' : ''}
+        </button>
+        
+        {lastCoverage !== null && selectedSensorNodes.length > 0 && (
+          <p className="text-xs text-center text-orange-600 font-medium">
+            Network coverage: {lastCoverage}%
+          </p>
+        )}
 
         {/* Random Sensor Placement */}
         <button
@@ -268,6 +298,7 @@ export function LeakDetection({
               .map(n => n.id);
             setSelectedSensorNodes(shuffled);
             onSensorNodesChange(shuffled);
+            setLastCoverage(null); // Clear coverage since this is random
           }}
           className="btn btn-secondary w-full flex items-center justify-center gap-2"
         >
@@ -281,6 +312,7 @@ export function LeakDetection({
             onClick={() => {
               setSelectedSensorNodes([]);
               onSensorNodesChange([]);
+              setLastCoverage(null);
             }}
             className="btn btn-secondary w-full flex items-center justify-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
           >
