@@ -49,38 +49,17 @@ export function NetworkMap({
     };
   }, [network.nodes]);
 
-  // Create node trace
-  const nodeTrace = useMemo(() => {
-    // Check if we have simulation data yet
+  // Create separate traces for different node types (for legend support)
+  const { sourceTrace, leakTrace, regularNodeTrace } = useMemo(() => {
     const hasSimulationData = Object.keys(simulationState.node_pressures).length > 0;
     
-    const colors = network.nodes.map(node => {
-      // Check if node has active leak
-      if (activeLeaks.includes(node.id)) return '#ef4444'; // red for leak
-      
-      // If no simulation data yet, use black for visibility (loading state)
-      if (!hasSimulationData) return '#1f2937'; // slate-800 (black/dark gray)
-      
-      // Color by pressure status
-      const pressure = simulationState.node_pressures[node.id] ?? 0;
-      const status = getPressureStatus(pressure, sourcePressure);
-      return getPressureColor(status);
-    });
-
-    const sizes = network.nodes.map(node => {
-      // Leak nodes should be larger and more visible
-      if (activeLeaks.includes(node.id)) return 22;
-      if (node.node_type === 'source') return 28;
-      if (node.node_type === 'industrial') return 20;
-      if (node.node_type === 'commercial') return 16;
-      return 14;
-    });
-
-    // Note: For scattermapbox, marker.color and marker.size only work with 'circle' symbol
-    // Other symbols like 'star' don't support color/size arrays
-    // So we use 'circle' for all nodes to ensure they render with proper colors
-
-    const hoverText = network.nodes.map(node => {
+    // Separate nodes into categories
+    const sourceNodes = network.nodes.filter(n => n.node_type === 'source');
+    const leakNodes = network.nodes.filter(n => activeLeaks.includes(n.id) && n.node_type !== 'source');
+    const regularNodes = network.nodes.filter(n => !activeLeaks.includes(n.id) && n.node_type !== 'source');
+    
+    // Helper to create hover text
+    const getHoverText = (node: Node) => {
       const pressure = simulationState.node_pressures[node.id] ?? 0;
       const demand = simulationState.node_actual_demand[node.id] ?? 0;
       const status = getPressureStatus(pressure, sourcePressure);
@@ -91,22 +70,75 @@ export function NetworkMap({
         `Pressure: ${pressure.toFixed(1)} kPa<br>` +
         `Demand: ${demand.toFixed(1)} m³/h<br>` +
         `Status: ${status}${leakText}`;
-    });
-
-    return {
+    };
+    
+    // Helper to get color for regular nodes
+    const getNodeColor = (node: Node) => {
+      if (!hasSimulationData) return '#1f2937';
+      const pressure = simulationState.node_pressures[node.id] ?? 0;
+      const status = getPressureStatus(pressure, sourcePressure);
+      return getPressureColor(status);
+    };
+    
+    // Helper to get size for regular nodes
+    const getNodeSize = (node: Node) => {
+      if (node.node_type === 'industrial') return 20;
+      if (node.node_type === 'commercial') return 16;
+      return 14;
+    };
+    
+    // Source trace (green, always shown in legend)
+    const sourceTraceData = sourceNodes.length > 0 ? {
       type: 'scattermapbox' as const,
       mode: 'markers' as const,
-      lon: network.nodes.map(n => n.x),
-      lat: network.nodes.map(n => n.y),
+      lon: sourceNodes.map(n => n.x),
+      lat: sourceNodes.map(n => n.y),
       marker: {
-        size: sizes,
-        color: colors,
-        // Use 'circle' for all - it's the only symbol that supports color/size arrays
+        size: 28,
+        color: '#22c55e', // green for source
       },
-      text: network.nodes.map(n => n.name),
-      hovertemplate: hoverText.map(t => t + '<extra></extra>'),
+      text: sourceNodes.map(n => n.name),
+      hovertemplate: sourceNodes.map(n => getHoverText(n) + '<extra></extra>'),
+      name: '⭐ Source',
+      showlegend: true,
+    } : null;
+    
+    // Leak trace (red, shown in legend when leaks exist)
+    const leakTraceData = leakNodes.length > 0 ? {
+      type: 'scattermapbox' as const,
+      mode: 'markers' as const,
+      lon: leakNodes.map(n => n.x),
+      lat: leakNodes.map(n => n.y),
+      marker: {
+        size: 22,
+        color: '#ef4444', // red for leaks
+      },
+      text: leakNodes.map(n => n.name),
+      hovertemplate: leakNodes.map(n => getHoverText(n) + '<extra></extra>'),
+      name: '🚨 Leak',
+      showlegend: true,
+    } : null;
+    
+    // Regular nodes trace (colored by pressure status)
+    const regularTraceData = regularNodes.length > 0 ? {
+      type: 'scattermapbox' as const,
+      mode: 'markers' as const,
+      lon: regularNodes.map(n => n.x),
+      lat: regularNodes.map(n => n.y),
+      marker: {
+        size: regularNodes.map(getNodeSize),
+        color: regularNodes.map(getNodeColor),
+      },
+      text: regularNodes.map(n => n.name),
+      hovertemplate: regularNodes.map(n => getHoverText(n) + '<extra></extra>'),
       name: 'Nodes',
       showlegend: false,
+    } : null;
+    
+    return {
+      sourceTrace: sourceTraceData,
+      leakTrace: leakTraceData,
+      regularNodeTrace: regularTraceData,
     };
   }, [network.nodes, simulationState, sourcePressure, activeLeaks]);
 
@@ -286,7 +318,12 @@ export function NetworkMap({
   // Build the complete data array
   const plotData = useMemo(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data: any[] = [...pipeTraces.filter(Boolean), nodeTrace];
+    const data: any[] = [...pipeTraces.filter(Boolean)];
+    
+    // Add node traces (source, leaks, regular) - filter out nulls
+    if (sourceTrace) data.push(sourceTrace);
+    if (leakTrace) data.push(leakTrace);
+    if (regularNodeTrace) data.push(regularNodeTrace);
     
     // Add sensor trace (if manually placed before detection)
     if (sensorTrace && !detectionResult) {
@@ -299,10 +336,10 @@ export function NetworkMap({
     }
     
     return data;
-  }, [pipeTraces, nodeTrace, sensorTrace, detectionResult, detectionTraces]);
+  }, [pipeTraces, sourceTrace, leakTrace, regularNodeTrace, sensorTrace, detectionResult, detectionTraces]);
 
-  // Determine if legend should be shown
-  const showLegend = Boolean((sensorTrace && !detectionResult) || (detectionResult && detectionTraces.length > 0));
+  // Determine if legend should be shown (show when we have source, leaks, sensors, or detection)
+  const showLegend = Boolean(sourceTrace || leakTrace || (sensorTrace && !detectionResult) || (detectionResult && detectionTraces.length > 0));
 
   return (
     <Plot
