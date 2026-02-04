@@ -12,6 +12,7 @@ import time
 from typing import List, Optional, Dict
 from pathlib import Path
 import random
+import networkx as nx
 
 # Import existing modules (they stay unchanged!)
 import sys
