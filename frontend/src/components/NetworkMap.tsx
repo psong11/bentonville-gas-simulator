@@ -7,7 +7,7 @@ import { useMemo, useCallback } from 'react';
 import Plot from 'react-plotly.js';
 import type { PlotMouseEvent } from 'plotly.js';
 import type { Network, SimulationState, Node, LeakDetectionResult } from '../types';
-import { getPressureStatus, getPressureColor } from '../types';
+import { getPressureStatus } from '../types';
 
 interface NetworkMapProps {
   network: Network;
