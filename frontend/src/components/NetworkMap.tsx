@@ -58,8 +58,8 @@ export function NetworkMap({
       // Check if node has active leak
       if (activeLeaks.includes(node.id)) return '#ef4444'; // red for leak
       
-      // If no simulation data yet, use a neutral blue color for visibility
-      if (!hasSimulationData) return '#3b82f6'; // blue (loading state)
+      // If no simulation data yet, use black for visibility (loading state)
+      if (!hasSimulationData) return '#1f2937'; // slate-800 (black/dark gray)
       
       // Color by pressure status
       const pressure = simulationState.node_pressures[node.id] ?? 0;
