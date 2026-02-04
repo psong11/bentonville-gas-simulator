@@ -196,8 +196,42 @@ class AppState:
         )
     
     def detect_leaks(self, strategy: str, num_sensors: int = 5, sensor_node_ids: list[int] | None = None) -> LeakDetectionResponse:
-        """Run leak detection with the specified strategy."""
+        """Run leak detection with the specified strategy.
+        
+        Sensors are REQUIRED for detection - if no sensors are placed, no leaks
+        can be detected. Sensors can only detect leaks within their visibility
+        range (nodes reachable within a certain graph distance).
+        """
         start_time = time.time()
+        
+        # Determine actual sensor placements FIRST
+        valid_ids = {n.id for n in self.nodes if n.node_type != 'source'}
+        
+        # Check if sensor_node_ids was explicitly provided (even if empty list)
+        if sensor_node_ids is not None:
+            # Use provided sensor IDs (validate they exist and are non-source)
+            # If empty list was explicitly passed, that means NO sensors
+            sensor_placements = [nid for nid in sensor_node_ids if nid in valid_ids]
+        else:
+            # sensor_node_ids not provided at all - use num_sensors as auto-placement
+            # Only if num_sensors > 0
+            if num_sensors > 0:
+                sensor_placements = [n.id for n in self.nodes[:num_sensors] if n.node_type != 'source']
+            else:
+                sensor_placements = []
+        
+        # CRITICAL: No sensors = no detection capability
+        if not sensor_placements:
+            detection_time = (time.time() - start_time) * 1000
+            return LeakDetectionResponse(
+                suspected_leaks=[],
+                detected_leaks=[],
+                sensor_placements=[],
+                detection_rate=0.0,
+                false_positive_rate=0.0,
+                strategy_used=strategy,
+                detection_time_ms=detection_time,
+            )
         
         # Always run fresh simulation before detection to ensure we have
         # the latest pressure data reflecting any active leaks
@@ -211,21 +245,37 @@ class AppState:
             simulation_state=self._simulation_state,
         )
         
+        # Calculate which nodes are "visible" to sensors
+        # A sensor can detect anomalies within a certain graph distance (hop count)
+        SENSOR_DETECTION_RADIUS = 3  # hops in the network graph
+        visible_nodes: set[int] = set()
+        for sensor_id in sensor_placements:
+            # Get all nodes within detection radius of this sensor
+            try:
+                # Use BFS to find nodes within radius
+                lengths = nx.single_source_shortest_path_length(self.graph, sensor_id, cutoff=SENSOR_DETECTION_RADIUS)
+                visible_nodes.update(lengths.keys())
+            except nx.NetworkXError:
+                # Node not in graph (shouldn't happen but be safe)
+                pass
+        
         detection_time = (time.time() - start_time) * 1000
         
-        # Convert to response schema
+        # Filter detected leaks to only those visible to sensors
         suspected = []
         detected_node_ids = []
         for leak in result.detected_leaks:
             node_id = leak['node_id']
-            detected_node_ids.append(node_id)
-            suspected.append(SuspectedLeak(
-                node_id=node_id,
-                confidence=leak['confidence'],
-                reason=leak.get('reason', f"Severity: {leak.get('estimated_severity', 'Unknown')}"),
-                pressure=leak.get('pressure'),
-                flow_imbalance=leak.get('flow_imbalance'),
-            ))
+            # Only include if visible to at least one sensor
+            if node_id in visible_nodes:
+                detected_node_ids.append(node_id)
+                suspected.append(SuspectedLeak(
+                    node_id=node_id,
+                    confidence=leak['confidence'],
+                    reason=leak.get('reason', f"Severity: {leak.get('estimated_severity', 'Unknown')}"),
+                    pressure=leak.get('pressure'),
+                    flow_imbalance=leak.get('flow_imbalance'),
+                ))
         
         # Calculate detection rate: how many actual leaks were detected
         actual_leaks = set(self.current_active_leaks)
@@ -235,14 +285,6 @@ class AppState:
         
         detection_rate = true_positives / len(actual_leaks) if actual_leaks else 0.0
         false_positive_rate = false_positives / len(detected_set) if detected_set else 0.0
-        
-        # Sensor placements - use provided IDs or default to top nodes by connectivity
-        if sensor_node_ids:
-            # Validate provided sensor node IDs exist and are non-source
-            valid_ids = {n.id for n in self.nodes if n.node_type != 'source'}
-            sensor_placements = [nid for nid in sensor_node_ids if nid in valid_ids]
-        else:
-            sensor_placements = [n.id for n in self.nodes[:num_sensors] if n.node_type != 'source']
         
         return LeakDetectionResponse(
             suspected_leaks=suspected,

@@ -142,14 +142,12 @@ export function LeakDetection({
   // How many more manual sensor selections can be added
   const remainingSensorSlots = numSensors - selectedSensorNodes.length;
 
-  // Handle detection - use manual sensors if selected, otherwise auto-place
+  // Handle detection - ALWAYS use explicit sensor placements (no auto-placement)
+  // This ensures detection only works with sensors the user has actually placed
   const handleDetect = useCallback(() => {
-    if (selectedSensorNodes.length > 0) {
-      onDetectLeaks(selectedSensorNodes.length, selectedSensorNodes);
-    } else {
-      onDetectLeaks(numSensors);
-    }
-  }, [numSensors, selectedSensorNodes, onDetectLeaks]);
+    // Always pass the exact sensors that are placed - never auto-place
+    onDetectLeaks(selectedSensorNodes.length, selectedSensorNodes);
+  }, [selectedSensorNodes, onDetectLeaks]);
 
   return (
     <div className="card space-y-6">
@@ -468,7 +466,7 @@ export function LeakDetection({
         
         <button
           onClick={handleDetect}
-          disabled={isDetecting || activeLeaks.length === 0}
+          disabled={isDetecting || activeLeaks.length === 0 || selectedSensorNodes.length === 0}
           className="btn btn-primary w-full flex items-center justify-center gap-2 py-3 text-base"
         >
           {isDetecting ? (
@@ -479,7 +477,12 @@ export function LeakDetection({
           Run Detection Simulation
         </button>
         
-        {activeLeaks.length === 0 && (
+        {selectedSensorNodes.length === 0 && (
+          <p className="text-xs text-amber-600 text-center">
+            Place sensors first before running detection.
+          </p>
+        )}
+        {selectedSensorNodes.length > 0 && activeLeaks.length === 0 && (
           <p className="text-xs text-amber-600 text-center">
             Inject leaks first before running detection.
           </p>
