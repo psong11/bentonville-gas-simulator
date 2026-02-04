@@ -313,29 +313,6 @@ export function LeakDetection({
           </div>
         )}
 
-        {/* Display active leak addresses */}
-        {activeLeaks.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {activeLeaks.map(nodeId => {
-              const node = network.nodes.find(n => n.id === nodeId);
-              return (
-                <span
-                  key={nodeId}
-                  className="badge bg-red-100 text-red-800 flex items-center gap-1"
-                >
-                  {node?.name || `Node ${nodeId}`}
-                  <button
-                    onClick={() => onInjectLeaks(activeLeaks.filter(id => id !== nodeId))}
-                    className="hover:text-red-900"
-                  >
-                    ×
-                  </button>
-                </span>
-              );
-            })}
-          </div>
-        )}
-
         {/* Leak Count Setting */}
         <div>
           <label className="label">Number of Leaks</label>
@@ -444,6 +421,29 @@ export function LeakDetection({
           )}
           Inject {numLeaks} Random Leak{numLeaks > 1 ? 's' : ''}
         </button>
+
+        {/* Display active leak addresses */}
+        {activeLeaks.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {activeLeaks.map(nodeId => {
+              const node = network.nodes.find(n => n.id === nodeId);
+              return (
+                <span
+                  key={nodeId}
+                  className="badge bg-red-100 text-red-800 flex items-center gap-1"
+                >
+                  {node?.name || `Node ${nodeId}`}
+                  <button
+                    onClick={() => onInjectLeaks(activeLeaks.filter(id => id !== nodeId))}
+                    className="hover:text-red-900"
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        )}
 
         {/* Clear Leaks */}
         {activeLeaks.length > 0 && (
