@@ -86,8 +86,8 @@ function SimulatorApp() {
   const { isConnected: wsConnected, lastUpdate, setPressure: wsPressure, setDemandMultiplier: wsDemand } = useWebSocket();
 
   // TanStack Query hooks - network and simulation are separate
-  const { data: networkData, isLoading: isLoadingNetwork, error: networkError } = useNetwork();
-  const { data: simulationData } = useSimulation();
+  const { data: networkData, isLoading: isLoadingNetwork, error: networkError, refetch: refetchNetwork } = useNetwork();
+  const { data: simulationData, refetch: refetchSimulation } = useSimulation();
   const generateNetworkMutation = useGenerateNetwork();
   const detectLeaksMutation = useLeakDetection();
   const injectLeaksMutation = useInjectLeaks();
@@ -243,6 +243,12 @@ function SimulatorApp() {
     });
   }, [clearLeaksMutation, addToast]);
 
+  const handleRefreshNetwork = useCallback(() => {
+    refetchNetwork();
+    refetchSimulation();
+    addToast('info', 'Network Refreshed', 'Network and simulation data reloaded.');
+  }, [refetchNetwork, refetchSimulation, addToast]);
+
   const handlePipeSelect = useCallback((pipeId: number | null) => {
     setSelectedPipeId(pipeId);
   }, []);
@@ -327,6 +333,7 @@ function SimulatorApp() {
               onSourcePressureChange={setSourcePressure}
               onDemandMultiplierChange={setDemandMultiplier}
               onGenerateNetwork={handleGenerateNetwork}
+              onRefreshNetwork={handleRefreshNetwork}
               isGenerating={generateNetworkMutation.isPending}
             />
           </div>
