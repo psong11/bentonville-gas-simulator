@@ -51,9 +51,15 @@ export function NetworkMap({
 
   // Create node trace
   const nodeTrace = useMemo(() => {
+    // Check if we have simulation data yet
+    const hasSimulationData = Object.keys(simulationState.node_pressures).length > 0;
+    
     const colors = network.nodes.map(node => {
       // Check if node has active leak
       if (activeLeaks.includes(node.id)) return '#ef4444'; // red for leak
+      
+      // If no simulation data yet, use a neutral blue color for visibility
+      if (!hasSimulationData) return '#3b82f6'; // blue (loading state)
       
       // Color by pressure status
       const pressure = simulationState.node_pressures[node.id] ?? 0;

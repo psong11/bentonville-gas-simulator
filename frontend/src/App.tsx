@@ -63,7 +63,8 @@ const DEFAULT_NETWORK_PARAMS: NetworkParams = {
 
 function SimulatorApp() {
   // State
-  const [sourcePressure, setSourcePressure] = useState(500);
+  // Default source pressure set to 600 kPa for better initial pressure distribution
+  const [sourcePressure, setSourcePressure] = useState(600);
   const [demandMultiplier, setDemandMultiplier] = useState(1.0);
   const [selectedPipeId, setSelectedPipeId] = useState<number | null>(null);
   const [detectionResult, setDetectionResult] = useState<LeakDetectionResult | null>(null);

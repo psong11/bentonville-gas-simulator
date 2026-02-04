@@ -86,7 +86,7 @@ export function ControlPanel({
         />
         <div className="flex justify-between text-xs text-slate-500 mt-1">
           <span>200 kPa</span>
-          <span>500 kPa (default)</span>
+          <span>600 kPa (default)</span>
           <span>800 kPa</span>
         </div>
       </div>
