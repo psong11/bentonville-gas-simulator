@@ -323,7 +323,13 @@ export function LeakDetection({
                   key={nodeId}
                   className="badge bg-red-100 text-red-800 flex items-center gap-1"
                 >
-                  ⚠️ {node?.name || `Node ${nodeId}`}
+                  {node?.name || `Node ${nodeId}`}
+                  <button
+                    onClick={() => onInjectLeaks(activeLeaks.filter(id => id !== nodeId))}
+                    className="hover:text-red-900"
+                  >
+                    ×
+                  </button>
                 </span>
               );
             })}
