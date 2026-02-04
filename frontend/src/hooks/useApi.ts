@@ -5,7 +5,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '../api/client';
-import type { NetworkParams, SimulationRequest, InjectLeaksRequest } from '../types';
+import type { NetworkParams, SimulationRequest, InjectLeaksRequest, SimulationState } from '../types';
 
 // ============================================================================
 // Query Keys
@@ -92,9 +92,33 @@ export function useInjectLeaks() {
   
   return useMutation({
     mutationFn: (request: InjectLeaksRequest) => api.injectLeaks(request),
-    onSuccess: () => {
-      // Invalidate queries to reflect new leaks
-      queryClient.invalidateQueries({ queryKey: queryKeys.network });
+    onMutate: async (request) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: queryKeys.simulation });
+      
+      // Snapshot previous value
+      const previousSimulation = queryClient.getQueryData(queryKeys.simulation);
+      
+      // Optimistically update: add leaks to active_leaks
+      queryClient.setQueryData(queryKeys.simulation, (old: SimulationState | undefined) => {
+        if (!old) return old;
+        const newActiveLeaks = { ...old.active_leaks };
+        request.node_ids.forEach(id => {
+          newActiveLeaks[id] = 1.0; // Default leak rate
+        });
+        return { ...old, active_leaks: newActiveLeaks };
+      });
+      
+      return { previousSimulation };
+    },
+    onError: (_err, _request, context) => {
+      // Rollback on error
+      if (context?.previousSimulation) {
+        queryClient.setQueryData(queryKeys.simulation, context.previousSimulation);
+      }
+    },
+    onSettled: () => {
+      // Always refetch after mutation to get server truth
       queryClient.invalidateQueries({ queryKey: queryKeys.simulation });
     },
   });
@@ -105,9 +129,29 @@ export function useClearLeaks() {
   
   return useMutation({
     mutationFn: api.clearLeaks,
-    onSuccess: () => {
-      // Invalidate queries to reflect cleared leaks
-      queryClient.invalidateQueries({ queryKey: queryKeys.network });
+    onMutate: async () => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: queryKeys.simulation });
+      
+      // Snapshot previous value
+      const previousSimulation = queryClient.getQueryData(queryKeys.simulation);
+      
+      // Optimistically update: clear all active_leaks immediately
+      queryClient.setQueryData(queryKeys.simulation, (old: SimulationState | undefined) => {
+        if (!old) return old;
+        return { ...old, active_leaks: {} };
+      });
+      
+      return { previousSimulation };
+    },
+    onError: (_err, _request, context) => {
+      // Rollback on error
+      if (context?.previousSimulation) {
+        queryClient.setQueryData(queryKeys.simulation, context.previousSimulation);
+      }
+    },
+    onSettled: () => {
+      // Always refetch after mutation to get server truth
       queryClient.invalidateQueries({ queryKey: queryKeys.simulation });
     },
   });
