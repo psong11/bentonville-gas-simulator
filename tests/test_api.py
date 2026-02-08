@@ -177,34 +177,323 @@ class TestLeakEndpoints:
         assert data["status"] == "ok"
 
 
+class TestOptimalSensorEndpoint:
+    """Tests for /api/sensors/optimal endpoint."""
+
+    def test_optimal_sensors_returns_placements(self, client):
+        """Optimal sensor endpoint should return sensor IDs and coverage."""
+        client.get("/api/network")
+
+        response = client.post("/api/sensors/optimal", json={"num_sensors": 3})
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "sensor_node_ids" in data
+        assert "coverage_percentage" in data
+        assert "algorithm" in data
+        assert len(data["sensor_node_ids"]) <= 3
+        assert 0 <= data["coverage_percentage"] <= 100
+        assert data["algorithm"] == "greedy_dominating_set"
+
+    def test_optimal_sensors_validates_count(self, client):
+        """Optimal sensor request should validate num_sensors range."""
+        client.get("/api/network")
+
+        # Too many sensors
+        response = client.post("/api/sensors/optimal", json={"num_sensors": 25})
+        assert response.status_code == 422
+
+    def test_optimal_sensors_coverage_increases(self, client):
+        """More sensors should cover more or equal network."""
+        client.get("/api/network")
+
+        resp_few = client.post("/api/sensors/optimal", json={"num_sensors": 2})
+        resp_many = client.post("/api/sensors/optimal", json={"num_sensors": 10})
+
+        assert resp_few.status_code == 200
+        assert resp_many.status_code == 200
+
+        assert resp_many.json()["coverage_percentage"] >= resp_few.json()["coverage_percentage"]
+
+
+class TestSimulationStateEndpoint:
+    """Tests for /api/simulation/state endpoint."""
+
+    def test_get_state_before_any_simulation(self, client):
+        """Getting simulation state should work even before any explicit simulation."""
+        # Fetching the network auto-generates one if needed, which runs an initial sim
+        client.get("/api/network")
+
+        response = client.get("/api/simulation/state")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "node_pressures" in data
+        assert "pipe_flow_rates" in data
+        assert "active_leaks" in data
+
+    def test_state_reflects_last_simulation(self, client):
+        """State endpoint should return results matching the last simulation."""
+        client.get("/api/network")
+
+        # Run simulation with specific pressure
+        client.post("/api/simulate", json={"source_pressure": 500})
+
+        state = client.get("/api/simulation/state").json()
+        assert len(state["node_pressures"]) > 0
+
+
+class TestLeakLifecycle:
+    """Tests for the complete leak inject -> verify -> detect -> clear lifecycle."""
+
+    def test_inject_leaks_by_node_ids(self, client):
+        """Inject leaks using explicit node IDs."""
+        network = client.get("/api/network").json()
+        # Pick two non-source node IDs
+        non_source_ids = [
+            n["id"] for n in network["nodes"] if n["node_type"] != "source"
+        ][:2]
+
+        response = client.post(
+            "/api/leaks/inject",
+            json={"node_ids": non_source_ids},
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        assert set(data["injected_node_ids"]) == set(non_source_ids)
+
+    def test_injected_leaks_appear_in_simulation_state(self, client):
+        """After injecting leaks, simulation state should reflect active_leaks."""
+        network = client.get("/api/network").json()
+        non_source_ids = [
+            n["id"] for n in network["nodes"] if n["node_type"] != "source"
+        ][:2]
+
+        # Inject leaks (this runs simulation internally)
+        client.post("/api/leaks/inject", json={"node_ids": non_source_ids})
+
+        # Get state WITHOUT re-running simulate (which would reset active_leaks
+        # via its default active_leaks=[] parameter)
+        state = client.get("/api/simulation/state").json()
+        active_leak_ids = [int(k) for k in state["active_leaks"].keys()]
+
+        for nid in non_source_ids:
+            assert nid in active_leak_ids, f"Node {nid} should be an active leak"
+
+    def test_clear_leaks_removes_all_active_leaks(self, client):
+        """After clearing, active_leaks should be empty."""
+        network = client.get("/api/network").json()
+        non_source_ids = [
+            n["id"] for n in network["nodes"] if n["node_type"] != "source"
+        ][:3]
+
+        # Inject then clear
+        client.post("/api/leaks/inject", json={"node_ids": non_source_ids})
+        clear_resp = client.post("/api/leaks/clear")
+        assert clear_resp.status_code == 200
+
+        # Re-run simulation and check state
+        client.post("/api/simulate", json={"source_pressure": 400})
+        state = client.get("/api/simulation/state").json()
+
+        assert len(state["active_leaks"]) == 0
+
+    def test_inject_replace_existing_leaks(self, client):
+        """A new inject call should replace previous leaks, not add to them."""
+        network = client.get("/api/network").json()
+        non_source = [
+            n["id"] for n in network["nodes"] if n["node_type"] != "source"
+        ]
+
+        first_ids = non_source[:2]
+        second_ids = non_source[5:7]
+
+        client.post("/api/leaks/inject", json={"node_ids": first_ids})
+        client.post("/api/leaks/inject", json={"node_ids": second_ids})
+
+        # Get state directly (inject runs simulation internally)
+        state = client.get("/api/simulation/state").json()
+        active_ids = set(int(k) for k in state["active_leaks"].keys())
+
+        # Only second set should be active
+        for nid in second_ids:
+            assert nid in active_ids
+        for nid in first_ids:
+            assert nid not in active_ids
+
+    def test_detect_leaks_with_explicit_sensor_ids(self, client):
+        """Detect leaks using explicit sensor_node_ids."""
+        network = client.get("/api/network").json()
+        non_source = [
+            n["id"] for n in network["nodes"] if n["node_type"] != "source"
+        ]
+
+        # Inject a leak
+        leak_id = non_source[10]
+        client.post("/api/leaks/inject", json={"node_ids": [leak_id]})
+        client.post("/api/simulate", json={"source_pressure": 400})
+
+        # Detect using explicit sensor nodes (neighbors of the leak)
+        sensor_ids = non_source[:5]
+        response = client.post(
+            "/api/leaks/detect",
+            json={
+                "strategy": "combined",
+                "sensor_node_ids": sensor_ids,
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "suspected_leaks" in data
+        assert "sensor_placements" in data
+        assert "detection_rate" in data
+        assert set(data["sensor_placements"]) == set(sensor_ids)
+
+    def test_optimal_sensors_into_detection(self, client):
+        """Use optimal sensor placements to run leak detection."""
+        network = client.get("/api/network").json()
+        non_source = [
+            n["id"] for n in network["nodes"] if n["node_type"] != "source"
+        ]
+
+        # Inject a leak
+        leak_id = non_source[15]
+        client.post("/api/leaks/inject", json={"node_ids": [leak_id]})
+        client.post("/api/simulate", json={"source_pressure": 400})
+
+        # Get optimal sensor placements
+        opt_resp = client.post("/api/sensors/optimal", json={"num_sensors": 5})
+        assert opt_resp.status_code == 200
+        sensor_ids = opt_resp.json()["sensor_node_ids"]
+
+        # Use those sensors for detection
+        detect_resp = client.post(
+            "/api/leaks/detect",
+            json={
+                "strategy": "combined",
+                "sensor_node_ids": sensor_ids,
+            },
+        )
+        assert detect_resp.status_code == 200
+        data = detect_resp.json()
+
+        assert "detection_rate" in data
+        assert "false_positive_rate" in data
+
+
 class TestWebSocket:
     """Tests for WebSocket endpoint."""
-    
+
     def test_websocket_connects(self, client):
         """WebSocket should accept connections."""
         with client.websocket_connect("/ws") as websocket:
             # Should receive initial state
             data = websocket.receive_json()
             assert data["type"] == "SIMULATION_UPDATE"
-    
+
     def test_websocket_set_pressure(self, client):
         """WebSocket should handle SET_PRESSURE message."""
         # First ensure network exists
         client.get("/api/network")
-        
+
         with client.websocket_connect("/ws") as websocket:
             # Receive initial state
             websocket.receive_json()
-            
+
             # Send pressure update
             websocket.send_json({
                 "type": "SET_PRESSURE",
                 "payload": {"value": 500}
             })
-            
+
             # Should receive simulation update
             data = websocket.receive_json()
             assert data["type"] == "SIMULATION_UPDATE"
+
+    def test_websocket_set_demand_multiplier(self, client):
+        """WebSocket should handle SET_DEMAND_MULTIPLIER message."""
+        client.get("/api/network")
+
+        with client.websocket_connect("/ws") as websocket:
+            # Receive initial state
+            websocket.receive_json()
+
+            # Send demand multiplier update
+            websocket.send_json({
+                "type": "SET_DEMAND_MULTIPLIER",
+                "payload": {"value": 1.5}
+            })
+
+            # Should receive simulation update
+            data = websocket.receive_json()
+            assert data["type"] == "SIMULATION_UPDATE"
+
+    def test_websocket_inject_leak(self, client):
+        """WebSocket should handle INJECT_LEAK message."""
+        client.get("/api/network")
+
+        with client.websocket_connect("/ws") as websocket:
+            # Receive initial state
+            websocket.receive_json()
+
+            # Send inject leak
+            websocket.send_json({
+                "type": "INJECT_LEAK",
+                "payload": {"count": 1}
+            })
+
+            # Should receive LEAK_ALERT then SIMULATION_UPDATE
+            msg1 = websocket.receive_json()
+            msg2 = websocket.receive_json()
+            types = {msg1["type"], msg2["type"]}
+            assert "LEAK_ALERT" in types
+            assert "SIMULATION_UPDATE" in types
+
+    def test_websocket_clear_leaks(self, client):
+        """WebSocket should handle CLEAR_LEAKS message."""
+        client.get("/api/network")
+
+        with client.websocket_connect("/ws") as websocket:
+            # Receive initial state
+            websocket.receive_json()
+
+            # First inject a leak
+            websocket.send_json({
+                "type": "INJECT_LEAK",
+                "payload": {"count": 1}
+            })
+            # Consume the LEAK_ALERT and SIMULATION_UPDATE
+            websocket.receive_json()
+            websocket.receive_json()
+
+            # Now clear leaks
+            websocket.send_json({
+                "type": "CLEAR_LEAKS",
+                "payload": {}
+            })
+
+            # Should receive simulation update with no leaks
+            data = websocket.receive_json()
+            assert data["type"] == "SIMULATION_UPDATE"
+            assert len(data["payload"]["active_leaks"]) == 0
+
+    def test_websocket_unknown_type_returns_error(self, client):
+        """WebSocket should return ERROR for unknown message types."""
+        client.get("/api/network")
+
+        with client.websocket_connect("/ws") as websocket:
+            # Receive initial state
+            websocket.receive_json()
+
+            websocket.send_json({
+                "type": "NONEXISTENT_TYPE",
+                "payload": {}
+            })
+
+            data = websocket.receive_json()
+            assert data["type"] == "ERROR"
 
 
 if __name__ == "__main__":
