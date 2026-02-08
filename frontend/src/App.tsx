@@ -389,20 +389,20 @@ function SimulatorApp() {
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Charts Row */}
-            <div className="grid grid-cols-2 gap-6">
-              <FlowChart
-                network={network}
-                simulationState={simulationState}
-                selectedPipeId={selectedPipeId}
-                onPipeSelect={handlePipeSelect}
-              />
-              <PressureHistogram
-                simulationState={simulationState}
-                sourcePressure={sourcePressure}
-              />
-            </div>
+          {/* Charts Row - Full width across all 12 columns */}
+          <div className="col-span-12 grid grid-cols-2 gap-6">
+            <FlowChart
+              network={network}
+              simulationState={simulationState}
+              selectedPipeId={selectedPipeId}
+              onPipeSelect={handlePipeSelect}
+            />
+            <PressureHistogram
+              simulationState={simulationState}
+              sourcePressure={sourcePressure}
+            />
           </div>
         </div>
       </main>
