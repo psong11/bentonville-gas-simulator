@@ -122,7 +122,7 @@ export function FlowChart({
             autorange: 'reversed' as const,
             tickfont: { size: 10 },
           },
-          height: 450,
+          height: 400,
           hovermode: 'closest',
         }}
         config={{

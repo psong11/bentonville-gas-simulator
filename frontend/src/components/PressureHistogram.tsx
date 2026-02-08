@@ -181,7 +181,7 @@ export function PressureHistogram({
           yaxis: {
             title: { text: 'Node Count' },
           },
-          height: 280,
+          height: 400,
           showlegend: true,
           legend: {
             orientation: 'h' as const,
