@@ -1,6 +1,9 @@
 import re
+from pathlib import Path
 
-with open('/Users/paulsong/bentonville_gas_simulator/app.py', 'r') as f:
+app_path = Path(__file__).parent / 'app.py'
+
+with open(app_path, 'r') as f:
     content = f.read()
 
 # 1. Update CSS - find the closing pattern and add new styles
@@ -100,7 +103,7 @@ new_legend = '''    # Legend
 
 content = content.replace(old_legend, new_legend)
 
-with open('/Users/paulsong/bentonville_gas_simulator/app.py', 'w') as f:
+with open(app_path, 'w') as f:
     f.write(content)
 
 print("Updates applied successfully!")
