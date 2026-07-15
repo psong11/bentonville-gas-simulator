@@ -334,8 +334,8 @@ function SimulatorApp() {
       {/* Main Content */}
       <main className="flex-1 p-6 overflow-hidden">
         <div className="grid grid-cols-12 gap-6 h-full">
-          {/* Left Sidebar - Controls (independently scrollable) */}
-          <div className="col-span-3 space-y-6 overflow-y-auto max-h-[calc(100vh-200px)] pr-2">
+          {/* Left Sidebar - Controls (independently scrollable, sets the shared row height) */}
+          <div className="col-span-3 space-y-6 overflow-y-auto h-[calc(100vh-200px)] pr-2">
             <LeakDetection
               network={network}
               activeLeaks={activeLeaks}
@@ -360,21 +360,23 @@ function SimulatorApp() {
             />
           </div>
 
-          {/* Main Content Area */}
-          <div className="col-span-9 space-y-6">
+          {/* Main Content Area (stretches to match the sidebar height) */}
+          <div className="col-span-9 h-[calc(100vh-200px)]">
             {/* Network Map */}
-            <div className="card">
+            <div className="card h-full flex flex-col">
               <h3 className="font-semibold mb-4">Network Map</h3>
-              <NetworkMap
-                network={network}
-                simulationState={simulationState}
-                sourcePressure={sourcePressure}
-                selectedPipeId={selectedPipeId}
-                onPipeSelect={handlePipeSelect}
-                activeLeaks={activeLeaks}
-                detectionResult={detectionResult}
-                sensorNodes={sensorNodes}
-              />
+              <div className="flex-1 min-h-[400px]">
+                <NetworkMap
+                  network={network}
+                  simulationState={simulationState}
+                  sourcePressure={sourcePressure}
+                  selectedPipeId={selectedPipeId}
+                  onPipeSelect={handlePipeSelect}
+                  activeLeaks={activeLeaks}
+                  detectionResult={detectionResult}
+                  sensorNodes={sensorNodes}
+                />
+              </div>
               {selectedPipeId !== null && (
                 <div className="mt-2 flex items-center justify-between">
                   <span className="text-sm text-slate-600">
