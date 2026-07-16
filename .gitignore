@@ -63,3 +63,6 @@ out/
 
 # Vercel
 .vercel
+# ETL raw cache (re-fetchable via python -m etl.fetch)
+data/raw/
+data/network_procedural.json

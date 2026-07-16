@@ -9,11 +9,11 @@ export default defineConfig({
     // Proxy only used in development (when VITE_API_URL is not set)
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: process.env.API_PROXY_TARGET ?? 'http://localhost:8000',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8000',
+        target: (process.env.API_PROXY_TARGET ?? 'http://localhost:8000').replace('http', 'ws'),
         ws: true,
       },
     },

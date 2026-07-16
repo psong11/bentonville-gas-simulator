@@ -42,6 +42,9 @@ class NodeSchema(BaseModel):
     base_demand: float = Field(..., description="Base gas demand in m³/hour")
     elevation: float = Field(..., description="Elevation in meters")
     name: str
+    street: Optional[str] = None
+    land_use: Optional[str] = None
+    n_addresses: Optional[int] = None
 
     model_config = {"from_attributes": True}  # Allows creating from dataclass
 
@@ -56,6 +59,13 @@ class PipeSchema(BaseModel):
     roughness: float = Field(..., description="Pipe roughness for Darcy-Weisbach")
     material: str
     year_installed: int
+    street: Optional[str] = None
+    road_class: Optional[str] = None
+    flood_zone: Optional[str] = None
+    adt: Optional[int] = None
+    path: Optional[List[List[float]]] = Field(
+        default=None, description="Street-true geometry [[lon, lat], ...]"
+    )
 
     model_config = {"from_attributes": True}
 

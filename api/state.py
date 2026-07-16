@@ -42,8 +42,11 @@ class AppState:
     Phase 6 will replace this with PostgreSQL queries.
     """
     
-    # Path to network data file (legacy, will be replaced by PostgreSQL)
+    # Street-true Bentonville artifact (built by `python -m etl.build_network`)
     DATA_PATH = Path(__file__).parent.parent / "data" / "network.json"
+    # Procedural networks generated at runtime save here so they never
+    # clobber the committed street-true artifact.
+    PROCEDURAL_PATH = Path(__file__).parent.parent / "data" / "network_procedural.json"
     
     def __init__(self):
         self.nodes: List[GasNode] = []
@@ -93,9 +96,9 @@ class AppState:
         generator = CityNetworkGenerator()
         self.nodes, self.pipes, self.graph = generator.generate_network(n_nodes=node_count)
         
-        # Save to file (legacy persistence)
-        self.DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-        generator.save_network(self.nodes, self.pipes, str(self.DATA_PATH))
+        # Save to file (legacy persistence) — never overwrites the street-true artifact
+        self.PROCEDURAL_PATH.parent.mkdir(parents=True, exist_ok=True)
+        generator.save_network(self.nodes, self.pipes, str(self.PROCEDURAL_PATH))
         
         # Reset simulation state
         self.current_active_leaks = []

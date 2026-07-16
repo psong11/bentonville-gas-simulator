@@ -120,11 +120,9 @@ export function useWebSocket(): UseWebSocketReturn {
         // Production: use configured WebSocket URL
         wsUrl = `${import.meta.env.VITE_WS_URL}/ws`;
       } else {
-        // Development: connect to local backend
+        // Development: same-origin through the Vite proxy (vite.config.ts -> /ws)
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.hostname;
-        const port = import.meta.env.DEV ? '8000' : window.location.port;
-        wsUrl = `${protocol}//${host}:${port}/ws`;
+        wsUrl = `${protocol}//${window.location.host}/ws`;
       }
       
       console.log('Connecting to WebSocket:', wsUrl);

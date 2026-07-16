@@ -17,6 +17,10 @@ export interface Node {
   base_demand: number; // m³/hour
   elevation: number; // meters
   name: string;
+  // Street-true attributes (null on procedural networks)
+  street?: string | null;
+  land_use?: string | null;
+  n_addresses?: number | null;
 }
 
 export interface Pipe {
@@ -28,6 +32,12 @@ export interface Pipe {
   roughness: number;
   material: string;
   year_installed: number;
+  // Street-true attributes (null on procedural networks)
+  street?: string | null;
+  road_class?: 'arterial' | 'collector' | 'local' | null;
+  flood_zone?: '100yr' | '500yr' | null;
+  adt?: number | null;
+  path?: [number, number][] | null; // street geometry [lon, lat]
 }
 
 export interface Network {
