@@ -1,5 +1,13 @@
 # Bentonville Gas Simulator — 3-Day Revamp Plan (gas-focused)
 
+> **STATUS (2026-07-16):** Day 1 (street-true network + map) ✅ shipped.
+> The Claude agent was pulled FORWARD of the math phase (user call: first-glance
+> value) and ✅ shipped with 8 tools + map-reactive highlights + first-impression
+> polish. Remaining = the Day-2 math below (risk engine, leak-signature matrix,
+> submodular placement + gain curve, Risk/Sensor map layers); the agent's
+> `list_inspection_candidates` heuristic gets replaced in place by the risk
+> engine. See CLAUDE.md for run commands and paid-for gotchas.
+
 **Goal:** Turn the abstract-graph simulator into a real-Bentonville **gas** digital twin with three
 demo moments, in ~3 focused days:
 
