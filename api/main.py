@@ -132,6 +132,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ChatOps agent (Claude tool-use over the simulator)
+from api.agent import create_agent_router  # noqa: E402
+
+app.include_router(create_agent_router(lambda: app_state))
+
 # CORS configuration
 # Allow React dev server and production Vercel domains
 # ALLOWED_ORIGINS can be set via environment variable for flexibility
