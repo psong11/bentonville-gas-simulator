@@ -18,6 +18,11 @@ import { Map } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Network, SimulationState, Node, Pipe, LeakDetectionResult } from '../types';
 
+interface AgentHighlight {
+  node_ids?: number[];
+  pipe_ids?: number[];
+}
+
 interface NetworkMapProps {
   network: Network;
   simulationState: SimulationState;
@@ -27,6 +32,7 @@ interface NetworkMapProps {
   activeLeaks: number[];
   detectionResult: LeakDetectionResult | null;
   sensorNodes: number[];
+  agentHighlight?: AgentHighlight | null;
 }
 
 const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
@@ -89,6 +95,7 @@ export function NetworkMap({
   activeLeaks,
   detectionResult,
   sensorNodes,
+  agentHighlight,
 }: NetworkMapProps) {
   const [showFlood, setShowFlood] = useState(false);
   const [flood, setFlood] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -163,6 +170,15 @@ export function NetworkMap({
     const ids = new Set(detectionResult?.detected_leaks ?? []);
     return network.nodes.filter((n) => ids.has(n.id));
   }, [network.nodes, detectionResult]);
+
+  const agentPipes = useMemo(() => {
+    const ids = new Set(agentHighlight?.pipe_ids ?? []);
+    return network.pipes.filter((p) => ids.has(p.id));
+  }, [network.pipes, agentHighlight]);
+  const agentNodes = useMemo(() => {
+    const ids = new Set(agentHighlight?.node_ids ?? []);
+    return network.nodes.filter((n) => ids.has(n.id));
+  }, [network.nodes, agentHighlight]);
 
   const layers = [
     showFlood &&
@@ -272,6 +288,32 @@ export function NetworkMap({
       pickable: true,
       updateTriggers: { getRadius: [pulse] },
     }),
+    agentPipes.length > 0 &&
+      new PathLayer<Pipe>({
+        id: 'agent-pipes',
+        data: agentPipes,
+        getPath: getPipePath,
+        getColor: [255, 255, 255, Math.round(140 + 90 * Math.abs(Math.sin(Date.now() / 400)))] as [number, number, number, number],
+        getWidth: (p) => (PIPE_WIDTH[p.road_class ?? 'local'] ?? 1.4) + 3.5,
+        widthUnits: 'pixels' as const,
+        capRounded: true,
+        pickable: false,
+      }),
+    agentNodes.length > 0 &&
+      new ScatterplotLayer<Node>({
+        id: 'agent-nodes',
+        data: agentNodes,
+        getPosition: (n) => [n.x, n.y],
+        getRadius: 85,
+        radiusUnits: 'meters' as const,
+        radiusMinPixels: 9,
+        stroked: true,
+        filled: false,
+        getLineColor: [255, 255, 255, 230] as [number, number, number, number],
+        getLineWidth: 3,
+        lineWidthUnits: 'pixels' as const,
+        pickable: false,
+      }),
     new ScatterplotLayer<Node>({
       id: 'sources',
       data: sources,
@@ -374,6 +416,11 @@ export function NetworkMap({
           {sensorNodes.length > 0 && (
             <span>
               <span style={{ color: 'rgb(177,151,252)' }}>○</span> sensor
+            </span>
+          )}
+          {((agentHighlight?.pipe_ids?.length ?? 0) > 0 || (agentHighlight?.node_ids?.length ?? 0) > 0) && (
+            <span>
+              <span style={{ color: 'rgb(255,255,255)' }}>○</span> cited by assistant
             </span>
           )}
         </div>
