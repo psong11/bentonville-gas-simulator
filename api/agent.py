@@ -15,7 +15,7 @@ from typing import Any, AsyncGenerator
 
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -26,6 +26,34 @@ router = APIRouter()
 AGENT_MODEL = os.environ.get("AGENT_MODEL", "claude-opus-4-8")
 MAX_TOKENS = 16000
 MAX_TOOL_TURNS = 8
+
+# Cost guard for the public deployment: per-IP sliding window + global daily
+# cap. In-memory (per instance) — a soft guard against runaway API spend, not
+# a security boundary.
+RATE_WINDOW_S = 600
+RATE_PER_IP = int(os.environ.get("AGENT_RATE_PER_IP", "6"))
+RATE_DAILY_GLOBAL = int(os.environ.get("AGENT_RATE_DAILY", "150"))
+_ip_hits: dict[str, list[float]] = {}
+_daily = {"day": "", "count": 0}
+
+
+def _rate_limited(ip: str) -> str | None:
+    import time
+    from datetime import date
+
+    now = time.time()
+    today = date.today().isoformat()
+    if _daily["day"] != today:
+        _daily["day"], _daily["count"] = today, 0
+    if _daily["count"] >= RATE_DAILY_GLOBAL:
+        return "The assistant has hit its daily usage cap. Please try again tomorrow."
+    hits = [t for t in _ip_hits.get(ip, []) if now - t < RATE_WINDOW_S]
+    if len(hits) >= RATE_PER_IP:
+        return "Rate limit reached — please wait a few minutes between questions."
+    hits.append(now)
+    _ip_hits[ip] = hits
+    _daily["count"] += 1
+    return None
 
 SYSTEM_PROMPT = """\
 You are the operations assistant for the Bentonville Gas Distribution digital twin —
@@ -410,12 +438,17 @@ def create_agent_router(get_app_state) -> APIRouter:
     """get_app_state: callable returning the AppState singleton (avoids import cycle)."""
 
     @router.post("/api/agent")
-    async def agent(request: AgentRequest):
+    async def agent(request: AgentRequest, raw_request: Request):
         if not os.environ.get("ANTHROPIC_API_KEY"):
             raise HTTPException(
                 status_code=503,
                 detail="Agent unavailable: ANTHROPIC_API_KEY is not configured on the server.",
             )
+        ip = (raw_request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (
+            raw_request.client.host if raw_request.client else "unknown"
+        )
+        if msg := _rate_limited(ip):
+            raise HTTPException(status_code=429, detail=msg)
         return StreamingResponse(
             _agent_stream(get_app_state(), request.messages),
             media_type="text/event-stream",

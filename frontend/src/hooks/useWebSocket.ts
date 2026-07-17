@@ -110,6 +110,10 @@ export function useWebSocket(): UseWebSocketReturn {
 
   // Connect to WebSocket
   useEffect(() => {
+    // Hosts without WebSocket support (e.g. serverless) set VITE_DISABLE_WS;
+    // the app then runs entirely over REST.
+    if (import.meta.env.VITE_DISABLE_WS === '1') return;
+
     const connect = () => {
       // Determine WebSocket URL
       // In production: use VITE_WS_URL environment variable (Railway backend)

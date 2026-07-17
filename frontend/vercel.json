@@ -22,5 +22,11 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://gas-sim-api.vercel.app/api/:path*"
+    }
   ]
 }

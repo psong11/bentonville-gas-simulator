@@ -25,6 +25,7 @@ import {
   useSimulation,
   useGenerateNetwork,
   useLeakDetection,
+  useRunSimulation,
   useInjectLeaks,
   useClearLeaks,
   useOptimalSensors,
@@ -95,6 +96,7 @@ function SimulatorApp() {
   const generateNetworkMutation = useGenerateNetwork();
   const detectLeaksMutation = useLeakDetection();
   const injectLeaksMutation = useInjectLeaks();
+  const runSimulationMutation = useRunSimulation();
   const clearLeaksMutation = useClearLeaks();
   const optimalSensorsMutation = useOptimalSensors();
 
@@ -125,23 +127,36 @@ function SimulatorApp() {
     }
   }, [isLoadingNetwork, networkData, generateNetworkMutation, expectedNodeCount]);
 
-  // Trigger initial simulation when network loads and WebSocket connects
+  // Trigger initial simulation when the network loads (WS or REST)
   useEffect(() => {
-    if (!networkData || !wsConnected || networkData.nodes.length === 0) return;
-    
-    // Trigger simulation immediately when network + websocket are ready
-    wsPressure(sourcePressure);
-    wsDemand(demandMultiplier);
-  }, [networkData, wsConnected]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-run simulation via WebSocket when parameters change (debounced)
-  useEffect(() => {
-    if (!networkData || !wsConnected) return;
-    
-    const timer = setTimeout(() => {
-      // Use WebSocket for real-time broadcast to all clients
+    if (!networkData || networkData.nodes.length === 0) return;
+    if (wsConnected) {
       wsPressure(sourcePressure);
       wsDemand(demandMultiplier);
+    } else {
+      runSimulationMutation.mutate({
+        source_pressure: sourcePressure,
+        demand_multiplier: demandMultiplier,
+      });
+    }
+  }, [networkData, wsConnected]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-run simulation when parameters change (debounced). WebSocket when
+  // available (real-time broadcast); REST fallback otherwise (e.g. hosts
+  // without WebSocket support).
+  useEffect(() => {
+    if (!networkData) return;
+    
+    const timer = setTimeout(() => {
+      if (wsConnected) {
+        wsPressure(sourcePressure);
+        wsDemand(demandMultiplier);
+      } else {
+        runSimulationMutation.mutate({
+          source_pressure: sourcePressure,
+          demand_multiplier: demandMultiplier,
+        });
+      }
     }, 300); // 300ms debounce
     
     return () => clearTimeout(timer);
