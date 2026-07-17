@@ -76,6 +76,13 @@ function lerp(a: [number, number, number], b: [number, number, number], t: numbe
   ] as [number, number, number];
 }
 
+const R_LOW: [number, number, number] = [72, 82, 94]; // low risk — recedes
+const R_HIGH: [number, number, number] = [255, 71, 71]; // high risk — alarms
+
+function riskColor(score: number): [number, number, number] {
+  return lerp(R_LOW, R_HIGH, Math.pow(Math.max(0, Math.min(1, score)), 1.6));
+}
+
 function pressureColor(kPa: number, sourcePressure: number): [number, number, number] {
   if (kPa <= SERVICE_THRESHOLD_KPA) {
     const t = Math.max(0, Math.min(1, (kPa - 200) / (SERVICE_THRESHOLD_KPA - 200)));
@@ -99,6 +106,8 @@ export function NetworkMap({
 }: NetworkMapProps) {
   const [showFlood, setShowFlood] = useState(false);
   const [flood, setFlood] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [mode, setMode] = useState<'pressure' | 'risk'>('pressure');
+  const [riskScores, setRiskScores] = useState<Record<string, number> | null>(null);
   const [pulse, setPulse] = useState(1);
 
   // Load the static flood overlay lazily on first toggle
@@ -110,6 +119,16 @@ export function NetworkMap({
         .catch(() => setFlood(null));
     }
   }, [showFlood, flood]);
+
+  // Load risk scores lazily on first switch to risk view
+  useEffect(() => {
+    if (mode === 'risk' && !riskScores) {
+      fetch('/api/risk/weakpoints?top_k=10')
+        .then((r) => r.json())
+        .then((d) => setRiskScores(d.scores))
+        .catch(() => setRiskScores(null));
+    }
+  }, [mode, riskScores]);
 
   // Pulse animation while leaks are active
   const hasLeaks = activeLeaks.length > 0;
@@ -201,10 +220,14 @@ export function NetworkMap({
       id: 'pipes',
       data: network.pipes,
       getPath: getPipePath,
-      getColor: (p) =>
-        hasSim
+      getColor: (p) => {
+        if (mode === 'risk') {
+          return riskScores ? riskColor(riskScores[String(p.id)] ?? 0) : COLOR_NO_SIM;
+        }
+        return hasSim
           ? pressureColor(pipePressure.get(p.id) ?? sourcePressure, sourcePressure)
-          : COLOR_NO_SIM,
+          : COLOR_NO_SIM;
+      },
       getWidth: (p) => PIPE_WIDTH[p.road_class ?? 'local'] ?? 1.4,
       widthUnits: 'pixels',
       widthMinPixels: 1,
@@ -216,7 +239,7 @@ export function NetworkMap({
       onClick: (info: PickingInfo<Pipe>) =>
         onPipeSelect(info.object ? info.object.id : null),
       updateTriggers: {
-        getColor: [pipePressure, hasSim, sourcePressure],
+        getColor: [pipePressure, hasSim, sourcePressure, mode, riskScores],
       },
     }),
     selectedPipeId !== null &&
@@ -377,6 +400,23 @@ export function NetworkMap({
 
       {/* Layer controls */}
       <div className="absolute top-3 left-3 flex gap-2">
+        <div className="flex rounded-md overflow-hidden border border-slate-600">
+          {(['pressure', 'risk'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                mode === m
+                  ? m === 'risk'
+                    ? 'bg-red-500/25 text-red-100'
+                    : 'bg-teal-500/25 text-teal-100'
+                  : 'bg-slate-900/70 text-slate-300 hover:text-slate-100'
+              }`}
+            >
+              {m === 'pressure' ? 'Pressure' : 'Risk'}
+            </button>
+          ))}
+        </div>
         <button
           onClick={() => setShowFlood((v) => !v)}
           className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
@@ -389,20 +429,33 @@ export function NetworkMap({
         </button>
       </div>
 
-      {/* Pressure legend */}
+      {/* Legend (swaps with view mode) */}
       <div className="absolute bottom-3 left-3 bg-slate-900/80 rounded-md px-3 py-2 text-[11px] text-slate-200">
-        <div className="font-medium mb-1">Pressure (kPa)</div>
+        <div className="font-medium mb-1">
+          {mode === 'risk' ? 'Failure risk (percentile)' : 'Pressure (kPa)'}
+        </div>
         <div
           className="h-2 w-36 rounded-sm"
           style={{
             background:
-              'linear-gradient(to right, rgb(255,107,74), rgb(154,165,177) 45%, rgb(45,212,191))',
+              mode === 'risk'
+                ? 'linear-gradient(to right, rgb(72,82,94), rgb(255,71,71))'
+                : 'linear-gradient(to right, rgb(255,107,74), rgb(154,165,177) 45%, rgb(45,212,191))',
           }}
         />
         <div className="flex justify-between mt-0.5 text-slate-400">
-          <span>200</span>
-          <span>300</span>
-          <span>{Math.max(sourcePressure, 340).toFixed(0)}</span>
+          {mode === 'risk' ? (
+            <>
+              <span>low</span>
+              <span>high</span>
+            </>
+          ) : (
+            <>
+              <span>200</span>
+              <span>300</span>
+              <span>{Math.max(sourcePressure, 340).toFixed(0)}</span>
+            </>
+          )}
         </div>
         <div className="mt-1.5 flex flex-col gap-0.5 text-slate-300">
           <span>

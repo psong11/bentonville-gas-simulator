@@ -5,6 +5,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ChatOps, type AgentHighlight } from './components/ChatOps';
+import { SensorPlanCard } from './components/SensorPlanCard';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Flame, AlertCircle } from 'lucide-react';
 
@@ -400,7 +401,8 @@ function SimulatorApp() {
           </div>
 
           {/* Charts Row - Full width across all 12 columns */}
-          <div className="col-span-12 grid grid-cols-2 gap-6">
+          <div className="col-span-12 grid grid-cols-2 xl:grid-cols-3 gap-6">
+            <SensorPlanCard onApply={setSensorNodes} />
             <FlowChart
               network={network}
               simulationState={simulationState}
