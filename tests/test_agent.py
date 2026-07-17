@@ -36,17 +36,18 @@ def test_network_status_shape(client):
 
 def test_inspection_candidates_ranked_and_highlightable(client):
     r = agent.tool_list_inspection_candidates(app_state, {"top_k": 5})
-    scores = [c["score"] for c in r["candidates"]]
+    scores = [c["risk"] for c in r["candidates"]]
     assert scores == sorted(scores, reverse=True)
     assert len(r["highlight"]["pipe_ids"]) == len(r["candidates"])
     assert all(c["street"] for c in r["candidates"])
 
 
-def test_flood_exposed_old_pipe_outranks_new_dry_pipe(client):
-    r = agent.tool_list_inspection_candidates(app_state, {"top_k": 15})
+def test_inspection_candidates_carry_risk_breakdown(client):
+    r = agent.tool_list_inspection_candidates(app_state, {"top_k": 3})
     top = r["candidates"][0]
-    # the top candidate should be meaningfully old or flood-exposed
-    assert top["factors"]["flood_zone"] is not None or top["factors"]["age"]["year_installed"] < 1990
+    assert {"p_fail", "consequence", "factors"} <= set(top.keys())
+    assert "isolates_demand_m3h" in top["factors"]
+    assert "P(fail) x consequence" in r["method"]
 
 
 def test_run_scenario_clamps_inputs(client):
@@ -68,8 +69,13 @@ def test_inject_and_clear_leaks_roundtrip(client):
 def test_sensor_placement_highlight(client):
     r = agent.tool_place_sensors(app_state, {"budget": 4})
     assert len(r["sensors"]) == 4
-    assert r["coverage_percentage"] > 0
     assert r["highlight"]["node_ids"]
+    # physics plan when the signature artifact exists, else dominating-set fallback
+    if "scenario_coverage_pct" in r:
+        assert r["scenario_coverage_pct"] > r["random_baseline_pct"]
+        assert len(r["marginal_gain_curve"]) == 4
+    else:
+        assert r["coverage_percentage"] > 0
 
 
 def test_agent_endpoint_guards_missing_key(client, monkeypatch):

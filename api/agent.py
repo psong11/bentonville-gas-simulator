@@ -67,12 +67,13 @@ TOOLS: list[dict] = [
     {
         "name": "list_inspection_candidates",
         "description": (
-            "Rank pipes that most deserve physical inspection/quality tests, using a "
-            "transparent heuristic over real attributes: pipe age (older = riskier), "
-            "FEMA flood-zone exposure, and simulated pressure drop. Returns street "
-            "names, scores with factor breakdown, and pipe ids for map highlighting. "
-            "Call this when asked about weak points, inspections, or maintenance "
-            "priorities."
+            "Rank pipes by engineering risk = P(fail) x consequence. P(fail) uses "
+            "material/age priors, FEMA flood exposure, excavation intensity (traffic), "
+            "and pressure utilization. Consequence uses demand isolated if the pipe "
+            "fails (graph bridges), flow carried, structural betweenness, and "
+            "proximity to critical facilities (approximate landmarks). Returns street "
+            "names, factor breakdowns, and pipe ids for map highlighting. Call this "
+            "for weak points, inspections, or maintenance priorities."
         ),
         "input_schema": {
             "type": "object",
@@ -116,9 +117,11 @@ TOOLS: list[dict] = [
     {
         "name": "place_sensors",
         "description": (
-            "Compute optimal sensor placement for a given budget using the greedy "
-            "dominating-set algorithm. Returns chosen locations (street names), "
-            "network coverage percentage, and node ids for map highlighting."
+            "Optimal sensor placement for a budget via greedy submodular max-coverage "
+            "over a physics-derived leak-signature matrix (200 risk-weighted leak "
+            "simulations; (1-1/e)-optimal). Returns locations (street names), % of "
+            "leak scenarios detected, the marginal-gain curve (how much each extra "
+            "sensor buys), a random-placement baseline, and node ids for highlighting."
         ),
         "input_schema": {
             "type": "object",
@@ -181,43 +184,15 @@ def tool_get_network_status(state, _args: dict) -> dict:
 
 
 def tool_list_inspection_candidates(state, args: dict) -> dict:
+    import risk
+
     top_k = min(int(args.get("top_k", 5) or 5), 15)
-    sim = state.get_current_simulation_state()
-    drops = sim.pipe_pressure_drops
-
-    years = sorted(p.year_installed for p in state.pipes)
-    drop_vals = sorted(abs(v) for v in drops.values()) or [0.0]
-
-    def pct(sorted_vals, v):
-        import bisect
-        return bisect.bisect_left(sorted_vals, v) / max(len(sorted_vals), 1)
-
-    scored = []
-    for p in state.pipes:
-        age_score = 1 - pct(years, p.year_installed)          # older -> higher
-        flood_score = 1.0 if p.flood_zone == "100yr" else 0.5 if p.flood_zone == "500yr" else 0.0
-        drop_score = pct(drop_vals, abs(drops.get(p.id, 0.0)))  # harder-working -> higher
-        score = 0.5 * age_score + 0.3 * flood_score + 0.2 * drop_score
-        scored.append((score, age_score, flood_score, drop_score, p))
-    scored.sort(key=lambda t: -t[0])
-
-    out = []
-    for score, age_s, flood_s, drop_s, p in scored[:top_k]:
-        out.append({
-            "street": _street(p),
-            "pipe_id": p.id,
-            "score": round(score, 3),
-            "factors": {
-                "age": {"year_installed": p.year_installed, "material": p.material, "score": round(age_s, 2)},
-                "flood_zone": p.flood_zone,
-                "pressure_drop_percentile": round(drop_s, 2),
-            },
-            "road_class": p.road_class,
-        })
+    result = risk.score_pipes(state)
+    top = result["pipes"][:top_k]
     return {
-        "method": "heuristic: 0.5*age + 0.3*flood exposure + 0.2*pressure-drop percentile",
-        "candidates": out,
-        "highlight": {"pipe_ids": [c["pipe_id"] for c in out]},
+        "method": result["method"],
+        "candidates": top,
+        "highlight": {"pipe_ids": [c["pipe_id"] for c in top]},
     }
 
 
@@ -260,18 +235,36 @@ def tool_clear_leaks(state, _args: dict) -> dict:
 
 
 def tool_place_sensors(state, args: dict) -> dict:
+    import placement
+
     budget = max(1, min(25, int(args.get("budget", 5))))
-    result = state.get_optimal_sensor_placements(budget)
     by_id = {n.id: n for n in state.nodes}
-    return {
-        "algorithm": result.algorithm,
-        "coverage_percentage": result.coverage_percentage,
-        "sensors": [
-            {"node_id": nid, "street": _street(by_id[nid])}
-            for nid in result.sensor_node_ids if nid in by_id
-        ],
-        "highlight": {"node_ids": result.sensor_node_ids},
-    }
+    try:
+        result = placement.plan(budget)
+        return {
+            "method": result["method"],
+            "scenario_coverage_pct": result["coverage_pct"],
+            "random_baseline_pct": result["baseline_random_pct"],
+            "marginal_gain_curve": [
+                {"k": s["k"], "coverage_pct": s["coverage_pct"]} for s in result["curve"]
+            ],
+            "sensors": [
+                {"node_id": nid, "street": _street(by_id[nid])}
+                for nid in result["sensor_node_ids"] if nid in by_id
+            ],
+            "highlight": {"node_ids": result["sensor_node_ids"]},
+        }
+    except placement.SignaturesUnavailable:
+        fallback = state.get_optimal_sensor_placements(budget)
+        return {
+            "method": f"fallback: {fallback.algorithm} (signature matrix not built)",
+            "coverage_percentage": fallback.coverage_percentage,
+            "sensors": [
+                {"node_id": nid, "street": _street(by_id[nid])}
+                for nid in fallback.sensor_node_ids if nid in by_id
+            ],
+            "highlight": {"node_ids": fallback.sensor_node_ids},
+        }
 
 
 def tool_detect_leaks(state, args: dict) -> dict:
