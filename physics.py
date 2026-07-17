@@ -199,6 +199,23 @@ class PhysicsEngine:
         """
         leaks = leaks or {}
         state = SimulationState(active_leaks=leaks.copy())
+
+        # Leak influence field: a leak depresses pressure across its hydraulic
+        # neighborhood (flow re-routes toward the leak and steepens drops along
+        # every feeding path), not just at the leak node. Approximate with a
+        # hop-distance decay from each leak, scaled by leak size.
+        LEAK_DECAY_BY_HOP = {1: 0.20, 2: 0.10, 3: 0.05, 4: 0.02}
+        leak_influence: Dict[int, float] = {}
+        for leak_node_id, leak_rate in leaks.items():
+            if leak_node_id not in graph:
+                continue
+            scale = min(leak_rate / 100, 0.9)
+            hops = nx.single_source_shortest_path_length(graph, leak_node_id, cutoff=4)
+            for nid, hop in hops.items():
+                if hop == 0:
+                    continue
+                influence = LEAK_DECAY_BY_HOP.get(hop, 0.0) * scale
+                leak_influence[nid] = max(leak_influence.get(nid, 0.0), influence)
         
         # Create lookup dictionaries
         node_dict = {n.id: n for n in nodes}
@@ -318,8 +335,11 @@ class PhysicsEngine:
                         leak_severity = min(leaks[node.id] / 100, 0.9)
                         new_pressure = max_neighbor_pressure * (1 - leak_severity) * 0.3
                     else:
-                        # New pressure is slightly below the max neighbor pressure
-                        new_pressure = max_neighbor_pressure * (1 - drop_factor)
+                        # New pressure is slightly below the max neighbor pressure,
+                        # further depressed inside a leak's influence field
+                        new_pressure = max_neighbor_pressure * (
+                            1 - drop_factor - leak_influence.get(node.id, 0.0)
+                        )
                     
                     # Relaxation for stability (higher alpha for faster convergence)
                     alpha = 0.5
