@@ -52,11 +52,22 @@ cd frontend && npm test && npx tsc -b       # 32 frontend + typecheck
   grew the other session's open PR. One session owns a branch/checkout at a
   time; check `git log`/`git status` for foreign commits before pushing.
 
+## Deploy (Vercel, both halves)
+
+- Frontend: project `bentonville-gas-sim` (root `frontend/`), static Vite build;
+  `/api/*` rewrites to the backend project (same-origin, no CORS). WS is off in
+  prod (`VITE_DISABLE_WS=1` in committed `.env.production`) — the app falls back
+  to REST automatically.
+- Backend: project `gas-sim-api`, FastAPI as a single Vercel Python function via
+  `scripts/deploy_backend.sh` (staging dir dodges Vercel's api/ auto-scan
+  colliding with our api/ package). Env: ANTHROPIC_API_KEY. Rate limit on
+  /api/agent (per-IP + daily global, env-tunable AGENT_RATE_*).
+- Live: https://bentonville-gas-sim.vercel.app · re-record the README GIF with
+  `scripts/record_demo.py` after visual changes.
+
 ## Status (2026-07-16)
 
-Done: street-true network + map (Day 1), ChatOps agent + first-impression
-polish. Remaining (phase 3, see docs/REVAMP_PLAN.md): risk/weak-point engine
-(replaces the agent's `list_inspection_candidates` heuristic in place),
-leak-signature matrix + greedy submodular sensor placement with gain curve,
-Risk/Sensor map layers. Branch `revamp/real-city`; PR #14 tracks it (title is
-stale — originally a layout fix).
+All planned phases shipped and deployed: street-true network + map, ChatOps
+agent, risk engine + submodular sensor placement + Risk/Sensor UI. Branch
+`revamp/real-city`; PR #14 tracks it (retitled to the revamp). 159 backend +
+32 frontend tests.
