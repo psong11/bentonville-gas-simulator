@@ -36,7 +36,11 @@ class GasNode:
     base_demand: float  # m³/hour - base gas demand
     elevation: float  # meters - affects pressure calculations
     name: str
-    
+    # Street-true attributes (etl.build_network); None on procedural networks
+    street: Optional[str] = None
+    land_use: Optional[str] = None  # city FLUM MapLabel
+    n_addresses: Optional[int] = None  # address points near the junction
+
     def to_dict(self) -> dict:
         return asdict(self)
 
@@ -52,7 +56,13 @@ class GasPipe:
     roughness: float  # meters (pipe roughness for Darcy-Weisbach)
     material: str
     year_installed: int
-    
+    # Street-true attributes (etl.build_network); None on procedural networks
+    street: Optional[str] = None
+    road_class: Optional[str] = None  # arterial | collector | local
+    flood_zone: Optional[str] = None  # 100yr | 500yr | None
+    adt: Optional[int] = None  # nearest ARDOT traffic count (excavation risk proxy)
+    path: Optional[List[List[float]]] = None  # [[lon, lat], ...] street geometry
+
     def to_dict(self) -> dict:
         return asdict(self)
 

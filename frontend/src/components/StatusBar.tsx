@@ -80,7 +80,7 @@ export function StatusBar({
           ) : (
             <>
               <WifiOff className="w-4 h-4 text-red-400" />
-              <span className="text-red-400">Disconnected</span>
+              <span className="text-amber-400">On-demand</span>
             </>
           )}
         </div>

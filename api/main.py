@@ -9,7 +9,7 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 from typing import List, Set
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 import json
@@ -132,6 +132,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ChatOps agent (Claude tool-use over the simulator)
+from api.agent import create_agent_router  # noqa: E402
+
+app.include_router(create_agent_router(lambda: app_state))
+
 # CORS configuration
 # Allow React dev server and production Vercel domains
 # ALLOWED_ORIGINS can be set via environment variable for flexibility
@@ -251,6 +256,41 @@ async def clear_leaks():
 # ============================================================================
 # Optimal Sensor Placement Routes
 # ============================================================================
+
+@app.get("/api/risk/weakpoints", tags=["Risk"])
+async def get_weak_points(top_k: int = 10):
+    """Per-pipe risk assessment: risk = P(fail) x consequence.
+
+    Returns the top-k ranked pipes with factor breakdowns plus a
+    {pipe_id: risk} map for coloring the whole network.
+    """
+    import risk
+
+    result = risk.score_pipes(app_state)
+    return {
+        "method": result["method"],
+        "top": result["pipes"][: max(1, min(top_k, 50))],
+        "scores": result["scores"],
+    }
+
+
+@app.post("/api/sensors/plan", tags=["Sensors"])
+async def get_sensor_plan(request: OptimalSensorRequest):
+    """Physics-based sensor plan: greedy submodular max-coverage over the
+    leak-signature matrix, with the marginal-gain curve and a random baseline."""
+    import placement
+
+    try:
+        result = placement.plan(request.num_sensors)
+    except placement.SignaturesUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    by_id = {n.id: n for n in app_state.nodes}
+    result["sensors"] = [
+        {"node_id": nid, "street": getattr(by_id[nid], "street", None) or by_id[nid].name}
+        for nid in result["sensor_node_ids"] if nid in by_id
+    ]
+    return result
+
 
 @app.post("/api/sensors/optimal", response_model=OptimalSensorResponse, tags=["Sensors"])
 async def get_optimal_sensors(request: OptimalSensorRequest):

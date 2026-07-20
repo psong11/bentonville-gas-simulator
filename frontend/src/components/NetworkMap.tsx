@@ -1,13 +1,27 @@
 /**
  * NetworkMap Component
- * Renders the gas distribution network using Plotly Scattermapbox
+ * Street-true gas network over real Bentonville on MapLibre + deck.gl.
+ *
+ * Encoding:
+ *  - Pipes: diverging color around the 300 kPa service threshold
+ *    (warm = below threshold, neutral gray = at threshold, teal = healthy),
+ *    width by road class (arterial > collector > local).
+ *  - City gates: large amber dots. Leaks: pulsing red. Sensors: violet rings.
+ *  - Flood overlay: FEMA SFHA (100yr) and 500yr zones, toggleable.
  */
 
-import { useMemo, useCallback } from 'react';
-import Plot from 'react-plotly.js';
-import type { PlotMouseEvent } from 'plotly.js';
-import type { Network, SimulationState, Node, LeakDetectionResult } from '../types';
-import { getPressureStatus } from '../types';
+import { useEffect, useMemo, useState } from 'react';
+import DeckGL from '@deck.gl/react';
+import { PathLayer, ScatterplotLayer, GeoJsonLayer } from '@deck.gl/layers';
+import type { PickingInfo } from '@deck.gl/core';
+import { Map } from 'react-map-gl/maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import type { Network, SimulationState, Node, Pipe, LeakDetectionResult } from '../types';
+
+interface AgentHighlight {
+  node_ids?: number[];
+  pipe_ids?: number[];
+}
 
 interface NetworkMapProps {
   network: Network;
@@ -18,6 +32,65 @@ interface NetworkMapProps {
   activeLeaks: number[];
   detectionResult: LeakDetectionResult | null;
   sensorNodes: number[];
+  agentHighlight?: AgentHighlight | null;
+}
+
+const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+
+const INITIAL_VIEW = {
+  longitude: -94.2088,
+  latitude: 36.3729,
+  zoom: 12.2,
+  pitch: 0,
+  bearing: 0,
+};
+
+// Diverging pressure ramp around the 300 kPa service threshold
+const SERVICE_THRESHOLD_KPA = 300;
+const P_LOW: [number, number, number] = [255, 107, 74]; // warm — below service
+const P_MID: [number, number, number] = [154, 165, 177]; // neutral — at threshold
+const P_HIGH: [number, number, number] = [45, 212, 191]; // teal — healthy
+
+const COLOR_SOURCE: [number, number, number] = [255, 212, 59];
+const COLOR_LEAK: [number, number, number] = [255, 82, 82];
+const COLOR_SENSOR: [number, number, number] = [177, 151, 252];
+const COLOR_DETECTED: [number, number, number] = [255, 169, 77];
+const COLOR_NO_SIM: [number, number, number] = [120, 130, 140];
+
+const PIPE_WIDTH: Record<string, number> = { arterial: 4, collector: 2.5, local: 1.4 };
+
+const tooltipStyle = {
+  backgroundColor: 'rgba(15, 23, 42, 0.92)',
+  color: '#e2e8f0',
+  fontSize: '12px',
+  borderRadius: '6px',
+  padding: '8px 10px',
+  maxWidth: '260px',
+};
+
+function lerp(a: [number, number, number], b: [number, number, number], t: number) {
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t),
+  ] as [number, number, number];
+}
+
+const R_LOW: [number, number, number] = [72, 82, 94]; // low risk — recedes
+const R_HIGH: [number, number, number] = [255, 71, 71]; // high risk — alarms
+
+function riskColor(score: number): [number, number, number] {
+  return lerp(R_LOW, R_HIGH, Math.pow(Math.max(0, Math.min(1, score)), 1.6));
+}
+
+function pressureColor(kPa: number, sourcePressure: number): [number, number, number] {
+  if (kPa <= SERVICE_THRESHOLD_KPA) {
+    const t = Math.max(0, Math.min(1, (kPa - 200) / (SERVICE_THRESHOLD_KPA - 200)));
+    return lerp(P_LOW, P_MID, t);
+  }
+  const top = Math.max(sourcePressure, 340);
+  const t = Math.max(0, Math.min(1, (kPa - SERVICE_THRESHOLD_KPA) / (top - SERVICE_THRESHOLD_KPA)));
+  return lerp(P_MID, P_HIGH, t);
 }
 
 export function NetworkMap({
@@ -29,354 +102,390 @@ export function NetworkMap({
   activeLeaks,
   detectionResult,
   sensorNodes,
+  agentHighlight,
 }: NetworkMapProps) {
-  // Build node lookup
-  const nodeDict = useMemo(() => {
-    const dict: Record<number, Node> = {};
-    network.nodes.forEach(node => {
-      dict[node.id] = node;
-    });
+  const [showFlood, setShowFlood] = useState(false);
+  const [flood, setFlood] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [mode, setMode] = useState<'pressure' | 'risk'>('pressure');
+  const [riskScores, setRiskScores] = useState<Record<string, number> | null>(null);
+  const [pulse, setPulse] = useState(1);
+
+  // Load the static flood overlay lazily on first toggle
+  useEffect(() => {
+    if (showFlood && !flood) {
+      fetch('/overlays/flood.geojson')
+        .then((r) => r.json())
+        .then(setFlood)
+        .catch(() => setFlood(null));
+    }
+  }, [showFlood, flood]);
+
+  // Load risk scores lazily on first switch to risk view
+  useEffect(() => {
+    if (mode === 'risk' && !riskScores) {
+      fetch('/api/risk/weakpoints?top_k=10')
+        .then((r) => r.json())
+        .then((d) => setRiskScores(d.scores))
+        .catch(() => setRiskScores(null));
+    }
+  }, [mode, riskScores]);
+
+  // Pulse animation while leaks or an agent highlight are active
+  const hasLeaks = activeLeaks.length > 0;
+  const hasAgentGlow = (agentHighlight?.pipe_ids?.length ?? 0) > 0;
+  useEffect(() => {
+    if (!hasLeaks && !hasAgentGlow) return;
+    const id = setInterval(
+      () => setPulse(1 + 0.5 * Math.abs(Math.sin(Date.now() / 350))),
+      70,
+    );
+    return () => clearInterval(id);
+  }, [hasLeaks, hasAgentGlow]);
+
+  const nodeById = useMemo(() => {
+    const dict = new globalThis.Map<number, Node>();
+    network.nodes.forEach((n) => dict.set(n.id, n));
     return dict;
   }, [network.nodes]);
 
-  // Calculate center of network
-  const center = useMemo(() => {
-    const xs = network.nodes.map(n => n.x);
-    const ys = network.nodes.map(n => n.y);
-    return {
-      lon: (Math.min(...xs) + Math.max(...xs)) / 2,
-      lat: (Math.min(...ys) + Math.max(...ys)) / 2,
-    };
-  }, [network.nodes]);
+  const pressures = simulationState.node_pressures;
+  const hasSim = Object.keys(pressures).length > 0;
 
-  // Create separate traces for different node types (for legend support)
-  const { sourceTrace, leakTrace, regularNodeTrace } = useMemo(() => {
-    const hasSimulationData = Object.keys(simulationState.node_pressures).length > 0;
-    
-    // Separate nodes into categories
-    const sourceNodes = network.nodes.filter(n => n.node_type === 'source');
-    const leakNodes = network.nodes.filter(n => activeLeaks.includes(n.id) && n.node_type !== 'source');
-    const regularNodes = network.nodes.filter(n => !activeLeaks.includes(n.id) && n.node_type !== 'source');
-    
-    // Helper to create hover text
-    const getHoverText = (node: Node) => {
-      const pressure = simulationState.node_pressures[node.id] ?? 0;
-      const demand = simulationState.node_actual_demand[node.id] ?? 0;
-      const status = getPressureStatus(pressure, sourcePressure);
-      const leakText = activeLeaks.includes(node.id) ? '<br>⚠️ LEAK ACTIVE' : '';
-      
-      return `<b>${node.name}</b><br>` +
-        `Type: ${node.node_type}<br>` +
-        `Pressure: ${pressure.toFixed(1)} kPa<br>` +
-        `Demand: ${demand.toFixed(1)} m³/h<br>` +
-        `Status: ${status}${leakText}`;
-    };
-    
-    // Helper to get color for regular nodes (muted/pastel versions)
-    const getNodeColor = (node: Node) => {
-      if (!hasSimulationData) return '#9ca3af'; // muted gray during loading
-      const pressure = simulationState.node_pressures[node.id] ?? 0;
-      const status = getPressureStatus(pressure, sourcePressure);
-      // Use muted/pastel versions for regular nodes so they don't compete with
-      // source, leaks, sensors, and detected leaks
-      const mutedColors: Record<string, string> = {
-        critical: '#fca5a5', // muted red (red-300)
-        warning: '#fcd34d',  // muted amber (amber-300)
-        normal: '#86efac',   // muted green (green-300)
-        over: '#d8b4fe',     // muted purple (purple-300)
-      };
-      return mutedColors[status] ?? '#9ca3af';
-    };
-    
-    // Helper to get size for regular nodes
-    const getNodeSize = (node: Node) => {
-      if (node.node_type === 'industrial') return 20;
-      if (node.node_type === 'commercial') return 16;
-      return 14;
-    };
-    
-    // Source trace (green, always shown in legend)
-    const sourceTraceData = sourceNodes.length > 0 ? {
-      type: 'scattermapbox' as const,
-      mode: 'markers' as const,
-      lon: sourceNodes.map(n => n.x),
-      lat: sourceNodes.map(n => n.y),
-      marker: {
-        size: 28,
-        color: '#22c55e', // green for source
-      },
-      text: sourceNodes.map(n => n.name),
-      hovertemplate: sourceNodes.map(n => getHoverText(n) + '<extra></extra>'),
-      name: 'Source',
-      showlegend: true,
-    } : null;
-    
-    // Leak trace (red, shown in legend when leaks exist)
-    const leakTraceData = leakNodes.length > 0 ? {
-      type: 'scattermapbox' as const,
-      mode: 'markers' as const,
-      lon: leakNodes.map(n => n.x),
-      lat: leakNodes.map(n => n.y),
-      marker: {
-        size: 22,
-        color: '#000000', // red for leaks
-      },
-      text: leakNodes.map(n => n.name),
-      hovertemplate: leakNodes.map(n => getHoverText(n) + '<extra></extra>'),
-      name: 'Leak',
-      showlegend: true,
-    } : null;
-    
-    // Regular nodes trace (colored by pressure status)
-    const regularTraceData = regularNodes.length > 0 ? {
-      type: 'scattermapbox' as const,
-      mode: 'markers' as const,
-      lon: regularNodes.map(n => n.x),
-      lat: regularNodes.map(n => n.y),
-      marker: {
-        size: regularNodes.map(getNodeSize),
-        color: regularNodes.map(getNodeColor),
-      },
-      text: regularNodes.map(n => n.name),
-      hovertemplate: regularNodes.map(n => getHoverText(n) + '<extra></extra>'),
-      name: 'Nodes',
-      showlegend: false,
-    } : null;
-    
-    return {
-      sourceTrace: sourceTraceData,
-      leakTrace: leakTraceData,
-      regularNodeTrace: regularTraceData,
-    };
-  }, [network.nodes, simulationState, sourcePressure, activeLeaks]);
-
-  // Create sensor trace (manually placed sensors before detection)
-  const sensorTrace = useMemo(() => {
-    if (sensorNodes.length === 0) return null;
-    
-    const sensorNodeData = sensorNodes
-      .map(id => network.nodes.find(n => n.id === id))
-      .filter((n): n is Node => n !== undefined);
-    
-    if (sensorNodeData.length === 0) return null;
-
-    return {
-      type: 'scattermapbox' as const,
-      mode: 'markers' as const,
-      lon: sensorNodeData.map(n => n.x),
-      lat: sensorNodeData.map(n => n.y),
-      marker: {
-        size: 18,
-        color: '#3b82f6', // blue
-        // Use circle - only symbol that supports color/size arrays
-      },
-      hovertemplate: sensorNodeData.map(n => 
-        `<b>📡 Sensor</b><br>${n.name}<extra></extra>`
-      ),
-      name: 'Sensors',
-      showlegend: true,
-    };
-  }, [sensorNodes, network.nodes]);
-
-  // Create detection result traces
-  const detectionTraces = useMemo(() => {
-    if (!detectionResult) return [];
-    
-    const traces: Plotly.Data[] = [];
-    const actualLeakSet = new Set(activeLeaks);
-    
-    // Detected leaks (true positives) - big green circles
-    const truePositives = detectionResult.detected_leaks.filter(id => actualLeakSet.has(id));
-    if (truePositives.length > 0) {
-      const tpNodes = truePositives
-        .map(id => network.nodes.find(n => n.id === id))
-        .filter((n): n is Node => n !== undefined);
-      
-      traces.push({
-        type: 'scattermapbox' as const,
-        mode: 'markers' as const,
-        lon: tpNodes.map(n => n.x),
-        lat: tpNodes.map(n => n.y),
-        marker: {
-          size: 24,
-          color: '#ff0000', // green
-          symbol: 'circle',
-        },
-        hovertemplate: tpNodes.map(n => 
-          `<b>✅ Leak Detected</b><br>${n.name}<extra></extra>`
-        ),
-        name: 'Detected Leaks',
-        showlegend: true,
-      });
+  const pipePressure = useMemo(() => {
+    const p = new globalThis.Map<number, number>();
+    for (const pipe of network.pipes) {
+      const a = pressures[pipe.source_id];
+      const b = pressures[pipe.target_id];
+      p.set(pipe.id, a !== undefined && b !== undefined ? (a + b) / 2 : sourcePressure);
     }
-    
-    // False positives - hollow red circles
-    const falsePositives = detectionResult.detected_leaks.filter(id => !actualLeakSet.has(id));
-    if (falsePositives.length > 0) {
-      const fpNodes = falsePositives
-        .map(id => network.nodes.find(n => n.id === id))
-        .filter((n): n is Node => n !== undefined);
-      
-      traces.push({
-        type: 'scattermapbox' as const,
-        mode: 'markers' as const,
-        lon: fpNodes.map(n => n.x),
-        lat: fpNodes.map(n => n.y),
-        marker: {
-          size: 20,
-          color: '#cfc100', // red
-          // Use circle - 'circle-open' doesn't work well
-        },
-        hovertemplate: fpNodes.map(n => 
-          `<b>❌ False Positive</b><br>${n.name}<extra></extra>`
-        ),
-        name: 'False Positives',
-        showlegend: true,
-      });
-    }
-    
-    // Sensor placements from detection result (if different from manually placed)
-    const resultSensors = detectionResult.sensor_placements;
-    if (resultSensors.length > 0) {
-      const sensorNodeData = resultSensors
-        .map(id => network.nodes.find(n => n.id === id))
-        .filter((n): n is Node => n !== undefined);
-      
-      traces.push({
-        type: 'scattermapbox' as const,
-        mode: 'markers' as const,
-        lon: sensorNodeData.map(n => n.x),
-        lat: sensorNodeData.map(n => n.y),
-        marker: {
-          size: 18,
-          color: '#3b82f6', // blue
-          // Use circle - only symbol that supports color/size arrays
-        },
-        hovertemplate: sensorNodeData.map(n => 
-          `<b>📡 Sensor</b><br>${n.name}<extra></extra>`
-        ),
-        name: 'Sensors',
-        showlegend: true,
-      });
-    }
-    
-    return traces;
-  }, [detectionResult, activeLeaks, network.nodes]);
+    return p;
+  }, [network.pipes, pressures, sourcePressure]);
 
-  // Create pipe traces
-  const pipeTraces = useMemo(() => {
-    return network.pipes.map(pipe => {
-      const sourceNode = nodeDict[pipe.source_id];
-      const targetNode = nodeDict[pipe.target_id];
-      
-      if (!sourceNode || !targetNode) return null;
+  const getPipePath = (pipe: Pipe): [number, number][] => {
+    if (pipe.path && pipe.path.length >= 2) return pipe.path;
+    const a = nodeById.get(pipe.source_id);
+    const b = nodeById.get(pipe.target_id);
+    return a && b ? [[a.x, a.y], [b.x, b.y]] : [];
+  };
 
-      const flowRate = Math.abs(simulationState.pipe_flow_rates[pipe.id] ?? 0);
-      const isSelected = pipe.id === selectedPipeId;
-      
-      // Width based on flow rate (1-6 range)
-      const width = Math.min(1 + flowRate / 100, 6);
-      
-      // Color based on flow rate
-      let color = '#6b7280'; // gray default
-      if (flowRate > 200) color = '#3b82f6'; // blue high
-      else if (flowRate > 50) color = '#22c55e'; // green medium
-      else if (flowRate > 10) color = '#eab308'; // yellow low
+  const consumers = useMemo(
+    () => network.nodes.filter((n) => n.node_type !== 'source'),
+    [network.nodes],
+  );
+  const sources = useMemo(
+    () => network.nodes.filter((n) => n.node_type === 'source'),
+    [network.nodes],
+  );
+  const leakSet = useMemo(() => new Set(activeLeaks), [activeLeaks]);
+  const leakNodes = useMemo(
+    () => network.nodes.filter((n) => leakSet.has(n.id)),
+    [network.nodes, leakSet],
+  );
+  const sensorSet = useMemo(() => new Set(sensorNodes), [sensorNodes]);
+  const sensorNodeObjs = useMemo(
+    () => network.nodes.filter((n) => sensorSet.has(n.id)),
+    [network.nodes, sensorSet],
+  );
+  const detectedNodes = useMemo(() => {
+    const ids = new Set(detectionResult?.detected_leaks ?? []);
+    return network.nodes.filter((n) => ids.has(n.id));
+  }, [network.nodes, detectionResult]);
 
-      // Override for selected pipe
-      if (isSelected) {
-        color = '#ef4444'; // red
-      }
+  const agentPipes = useMemo(() => {
+    const ids = new Set(agentHighlight?.pipe_ids ?? []);
+    return network.pipes.filter((p) => ids.has(p.id));
+  }, [network.pipes, agentHighlight]);
+  const agentNodes = useMemo(() => {
+    const ids = new Set(agentHighlight?.node_ids ?? []);
+    return network.nodes.filter((n) => ids.has(n.id));
+  }, [network.nodes, agentHighlight]);
 
+  const layers = [
+    showFlood &&
+      flood &&
+      new GeoJsonLayer({
+        id: 'flood',
+        data: flood,
+        stroked: true,
+        filled: true,
+        getFillColor: (f) =>
+          (f.properties as { zone?: string }).zone === '100yr'
+            ? [77, 171, 247, 55]
+            : [77, 171, 247, 30],
+        getLineColor: [77, 171, 247, 90],
+        getLineWidth: 1,
+        lineWidthUnits: 'pixels' as const,
+        pickable: false,
+      }),
+    new PathLayer<Pipe>({
+      id: 'pipes',
+      data: network.pipes,
+      getPath: getPipePath,
+      getColor: (p) => {
+        if (mode === 'risk') {
+          return riskScores ? riskColor(riskScores[String(p.id)] ?? 0) : COLOR_NO_SIM;
+        }
+        return hasSim
+          ? pressureColor(pipePressure.get(p.id) ?? sourcePressure, sourcePressure)
+          : COLOR_NO_SIM;
+      },
+      getWidth: (p) => PIPE_WIDTH[p.road_class ?? 'local'] ?? 1.4,
+      widthUnits: 'pixels',
+      widthMinPixels: 1,
+      capRounded: true,
+      jointRounded: true,
+      pickable: true,
+      autoHighlight: true,
+      highlightColor: [255, 255, 255, 120],
+      onClick: (info: PickingInfo<Pipe>) =>
+        onPipeSelect(info.object ? info.object.id : null),
+      updateTriggers: {
+        getColor: [pipePressure, hasSim, sourcePressure, mode, riskScores],
+      },
+    }),
+    selectedPipeId !== null &&
+      new PathLayer<Pipe>({
+        id: 'selected-pipe',
+        data: network.pipes.filter((p) => p.id === selectedPipeId),
+        getPath: getPipePath,
+        getColor: [255, 255, 255] as [number, number, number],
+        getWidth: (p) => (PIPE_WIDTH[p.road_class ?? 'local'] ?? 1.4) + 2.5,
+        widthUnits: 'pixels' as const,
+        capRounded: true,
+        pickable: false,
+      }),
+    new ScatterplotLayer<Node>({
+      id: 'consumers',
+      data: consumers,
+      getPosition: (n) => [n.x, n.y],
+      getRadius: 14,
+      radiusUnits: 'meters',
+      radiusMinPixels: 1.2,
+      radiusMaxPixels: 5,
+      getFillColor: (n) =>
+        hasSim && pressures[n.id] !== undefined
+          ? pressureColor(pressures[n.id], sourcePressure)
+          : COLOR_NO_SIM,
+      pickable: true,
+      updateTriggers: { getFillColor: [pressures, hasSim, sourcePressure] },
+    }),
+    new ScatterplotLayer<Node>({
+      id: 'sensors',
+      data: sensorNodeObjs,
+      getPosition: (n) => [n.x, n.y],
+      getRadius: 55,
+      radiusUnits: 'meters',
+      radiusMinPixels: 6,
+      stroked: true,
+      filled: false,
+      getLineColor: COLOR_SENSOR,
+      getLineWidth: 3,
+      lineWidthUnits: 'pixels',
+      pickable: true,
+    }),
+    new ScatterplotLayer<Node>({
+      id: 'detected-leaks',
+      data: detectedNodes,
+      getPosition: (n) => [n.x, n.y],
+      getRadius: 75,
+      radiusUnits: 'meters',
+      radiusMinPixels: 8,
+      stroked: true,
+      filled: false,
+      getLineColor: COLOR_DETECTED,
+      getLineWidth: 2.5,
+      lineWidthUnits: 'pixels',
+      pickable: true,
+    }),
+    new ScatterplotLayer<Node>({
+      id: 'leaks',
+      data: leakNodes,
+      getPosition: (n) => [n.x, n.y],
+      getRadius: 45 * pulse,
+      radiusUnits: 'meters',
+      radiusMinPixels: 5,
+      getFillColor: [...COLOR_LEAK, 200] as [number, number, number, number],
+      stroked: true,
+      getLineColor: [255, 255, 255, 180],
+      getLineWidth: 1.5,
+      lineWidthUnits: 'pixels',
+      pickable: true,
+      updateTriggers: { getRadius: [pulse] },
+    }),
+    agentPipes.length > 0 &&
+      new PathLayer<Pipe>({
+        id: 'agent-pipes',
+        data: agentPipes,
+        getPath: getPipePath,
+        getColor: [255, 255, 255, Math.round(140 + 180 * (pulse - 1))] as [number, number, number, number],
+        getWidth: (p) => (PIPE_WIDTH[p.road_class ?? 'local'] ?? 1.4) + 3.5,
+        widthUnits: 'pixels' as const,
+        capRounded: true,
+        pickable: false,
+        updateTriggers: { getColor: [pulse] },
+      }),
+    agentNodes.length > 0 &&
+      new ScatterplotLayer<Node>({
+        id: 'agent-nodes',
+        data: agentNodes,
+        getPosition: (n) => [n.x, n.y],
+        getRadius: 85,
+        radiusUnits: 'meters' as const,
+        radiusMinPixels: 9,
+        stroked: true,
+        filled: false,
+        getLineColor: [255, 255, 255, 230] as [number, number, number, number],
+        getLineWidth: 3,
+        lineWidthUnits: 'pixels' as const,
+        pickable: false,
+      }),
+    new ScatterplotLayer<Node>({
+      id: 'sources',
+      data: sources,
+      getPosition: (n) => [n.x, n.y],
+      getRadius: 110,
+      radiusUnits: 'meters',
+      radiusMinPixels: 9,
+      getFillColor: [...COLOR_SOURCE, 230] as [number, number, number, number],
+      stroked: true,
+      getLineColor: [30, 30, 30, 255],
+      getLineWidth: 2,
+      lineWidthUnits: 'pixels',
+      pickable: true,
+    }),
+  ].filter(Boolean);
+
+  const getTooltip = ({ object, layer }: PickingInfo) => {
+    if (!object) return null;
+    if (layer?.id === 'pipes') {
+      const p = object as Pipe;
+      const kPa = pipePressure.get(p.id);
       return {
-        type: 'scattermapbox' as const,
-        mode: 'lines' as const,
-        lon: [sourceNode.x, targetNode.x],
-        lat: [sourceNode.y, targetNode.y],
-        line: {
-          width: isSelected ? width + 3 : width,
-          color,
-        },
-        hoverinfo: 'text' as const,
-        hovertemplate: 
-          `<b>Pipe #${pipe.id}</b><br>` +
-          `${sourceNode.name} → ${targetNode.name}<br>` +
-          `Flow: ${flowRate.toFixed(1)} m³/h<br>` +
-          `Length: ${pipe.length.toFixed(0)}m<br>` +
-          `Diameter: ${(pipe.diameter * 1000).toFixed(0)}mm` +
-          `<extra></extra>`,
-        name: `Pipe ${pipe.id}`,
-        customdata: [{ pipeId: pipe.id }],
-        showlegend: false,
+        html: `
+          <div style="font-weight:600;margin-bottom:2px">${p.street ?? 'Pipe'} <span style="opacity:.6">#${p.id}</span></div>
+          <div>${p.road_class ?? ''} · ${p.material} · ${p.year_installed}</div>
+          <div>${(p.length / 1000).toFixed(2)} km · Ø ${(p.diameter * 1000).toFixed(0)} mm</div>
+          ${hasSim && kPa !== undefined ? `<div>avg pressure ${kPa.toFixed(1)} kPa</div>` : ''}
+          ${p.flood_zone ? `<div style="color:#4dabf7">⚠ FEMA ${p.flood_zone} flood zone</div>` : ''}
+        `,
+        style: tooltipStyle,
       };
-    }).filter(Boolean);
-  }, [network.pipes, nodeDict, simulationState, selectedPipeId]);
-
-  // Handle click on pipe
-  const handleClick = useCallback((event: PlotMouseEvent) => {
-    const point = event.points[0];
-    if (point && point.customdata) {
-      const customData = point.customdata as unknown as { pipeId: number };
-      if (customData?.pipeId !== undefined) {
-        onPipeSelect(customData.pipeId);
-      }
     }
-  }, [onPipeSelect]);
-
-  // Build the complete data array
-  const plotData = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data: any[] = [...pipeTraces.filter(Boolean)];
-    
-    // Add node traces (source, leaks, regular) - filter out nulls
-    if (sourceTrace) data.push(sourceTrace);
-    if (leakTrace) data.push(leakTrace);
-    if (regularNodeTrace) data.push(regularNodeTrace);
-    
-    // Add sensor trace (if manually placed before detection)
-    if (sensorTrace && !detectionResult) {
-      data.push(sensorTrace);
-    }
-    
-    // Add detection result traces
-    if (detectionResult) {
-      data.push(...detectionTraces);
-    }
-    
-    return data;
-  }, [pipeTraces, sourceTrace, leakTrace, regularNodeTrace, sensorTrace, detectionResult, detectionTraces]);
-
-  // Determine if legend should be shown (show when we have source, leaks, sensors, or detection)
-  const showLegend = Boolean(sourceTrace || leakTrace || (sensorTrace && !detectionResult) || (detectionResult && detectionTraces.length > 0));
+    const n = object as Node;
+    const kPa = pressures[n.id];
+    return {
+      html: `
+        <div style="font-weight:600;margin-bottom:2px">${n.name}</div>
+        <div>${n.node_type}${n.land_use ? ` · ${n.land_use}` : ''}</div>
+        <div>demand ${n.base_demand.toFixed(1)} m³/h${
+          n.n_addresses ? ` · ${n.n_addresses} addresses nearby` : ''
+        }</div>
+        ${kPa !== undefined ? `<div>pressure ${kPa.toFixed(1)} kPa</div>` : ''}
+      `,
+      style: tooltipStyle,
+    };
+  };
 
   return (
-    <Plot
-      data={plotData}
-      layout={{
-        mapbox: {
-          style: 'carto-positron',
-          center: center,
-          zoom: 12,
-        },
-        margin: { l: 0, r: 0, t: 0, b: 0 },
-        showlegend: showLegend,
-        legend: {
-          x: 0,
-          y: 1,
-          bgcolor: 'rgba(255,255,255,0.8)',
-          bordercolor: '#e2e8f0',
-          borderwidth: 1,
-        },
-        hovermode: 'closest',
-      }}
-      config={{
-        mapboxAccessToken: '', // Using free Carto style, no token needed
-        displayModeBar: true,
-        modeBarButtonsToRemove: ['select2d', 'lasso2d'],
-      }}
-      style={{ width: '100%', height: '500px' }}
-      onClick={handleClick}
-      useResizeHandler
-    />
+    <div className="relative w-full h-full min-h-[400px] rounded-lg overflow-hidden">
+      <DeckGL
+        initialViewState={INITIAL_VIEW}
+        controller={true}
+        layers={layers}
+        getTooltip={getTooltip}
+        onClick={(info) => {
+          if (!info.object) onPipeSelect(null);
+        }}
+      >
+        <Map mapStyle={BASEMAP} reuseMaps attributionControl={false} />
+      </DeckGL>
+
+      {/* Layer controls */}
+      <div className="absolute top-3 left-3 flex gap-2">
+        <div className="flex rounded-md overflow-hidden border border-slate-600">
+          {(['pressure', 'risk'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                mode === m
+                  ? m === 'risk'
+                    ? 'bg-red-500/25 text-red-100'
+                    : 'bg-teal-500/25 text-teal-100'
+                  : 'bg-slate-900/70 text-slate-300 hover:text-slate-100'
+              }`}
+            >
+              {m === 'pressure' ? 'Pressure' : 'Risk'}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setShowFlood((v) => !v)}
+          className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+            showFlood
+              ? 'bg-blue-500/20 border-blue-400/60 text-blue-100'
+              : 'bg-slate-900/70 border-slate-600 text-slate-300 hover:border-slate-400'
+          }`}
+        >
+          FEMA flood zones
+        </button>
+      </div>
+
+      {/* Legend (swaps with view mode) */}
+      <div className="absolute bottom-3 left-3 bg-slate-900/80 rounded-md px-3 py-2 text-[11px] text-slate-200">
+        <div className="font-medium mb-1">
+          {mode === 'risk' ? 'Failure risk (percentile)' : 'Pressure (kPa)'}
+        </div>
+        <div
+          className="h-2 w-36 rounded-sm"
+          style={{
+            background:
+              mode === 'risk'
+                ? 'linear-gradient(to right, rgb(72,82,94), rgb(255,71,71))'
+                : 'linear-gradient(to right, rgb(255,107,74), rgb(154,165,177) 45%, rgb(45,212,191))',
+          }}
+        />
+        <div className="flex justify-between mt-0.5 text-slate-400">
+          {mode === 'risk' ? (
+            <>
+              <span>low</span>
+              <span>high</span>
+            </>
+          ) : (
+            <>
+              <span>200</span>
+              <span>300</span>
+              <span>{Math.max(sourcePressure, 340).toFixed(0)}</span>
+            </>
+          )}
+        </div>
+        <div className="mt-1.5 flex flex-col gap-0.5 text-slate-300">
+          <span>
+            <span style={{ color: 'rgb(255,212,59)' }}>●</span> city gate (approx.)
+          </span>
+          {hasLeaks && (
+            <span>
+              <span style={{ color: 'rgb(255,82,82)' }}>●</span> active leak
+            </span>
+          )}
+          {sensorNodes.length > 0 && (
+            <span>
+              <span style={{ color: 'rgb(177,151,252)' }}>○</span> sensor
+            </span>
+          )}
+          {((agentHighlight?.pipe_ids?.length ?? 0) > 0 || (agentHighlight?.node_ids?.length ?? 0) > 0) && (
+            <span>
+              <span style={{ color: 'rgb(255,255,255)' }}>○</span> cited by assistant
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Data provenance */}
+      <div className="absolute bottom-3 right-3 bg-slate-900/70 rounded px-2 py-1 text-[10px] text-slate-400 max-w-[300px] text-right">
+        Streets, land use &amp; FEMA zones: City of Bentonville GIS. Network is
+        synthetic &amp; street-true — not utility as-builts.
+      </div>
+    </div>
   );
 }
