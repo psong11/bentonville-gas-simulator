@@ -130,16 +130,17 @@ export function NetworkMap({
     }
   }, [mode, riskScores]);
 
-  // Pulse animation while leaks are active
+  // Pulse animation while leaks or an agent highlight are active
   const hasLeaks = activeLeaks.length > 0;
+  const hasAgentGlow = (agentHighlight?.pipe_ids?.length ?? 0) > 0;
   useEffect(() => {
-    if (!hasLeaks) return;
+    if (!hasLeaks && !hasAgentGlow) return;
     const id = setInterval(
       () => setPulse(1 + 0.5 * Math.abs(Math.sin(Date.now() / 350))),
       70,
     );
     return () => clearInterval(id);
-  }, [hasLeaks]);
+  }, [hasLeaks, hasAgentGlow]);
 
   const nodeById = useMemo(() => {
     const dict = new globalThis.Map<number, Node>();
@@ -316,11 +317,12 @@ export function NetworkMap({
         id: 'agent-pipes',
         data: agentPipes,
         getPath: getPipePath,
-        getColor: [255, 255, 255, Math.round(140 + 90 * Math.abs(Math.sin(Date.now() / 400)))] as [number, number, number, number],
+        getColor: [255, 255, 255, Math.round(140 + 180 * (pulse - 1))] as [number, number, number, number],
         getWidth: (p) => (PIPE_WIDTH[p.road_class ?? 'local'] ?? 1.4) + 3.5,
         widthUnits: 'pixels' as const,
         capRounded: true,
         pickable: false,
+        updateTriggers: { getColor: [pulse] },
       }),
     agentNodes.length > 0 &&
       new ScatterplotLayer<Node>({

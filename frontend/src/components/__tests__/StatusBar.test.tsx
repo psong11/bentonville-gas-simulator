@@ -36,7 +36,7 @@ describe('StatusBar', () => {
     expect(screen.getByText('Connected')).toBeInTheDocument();
   });
 
-  it('shows Disconnected when WebSocket is disconnected', () => {
+  it('shows On-demand when WebSocket is disconnected', () => {
     render(
       <StatusBar
         network={mockNetwork}
@@ -46,7 +46,7 @@ describe('StatusBar', () => {
       />
     );
 
-    expect(screen.getByText('Disconnected')).toBeInTheDocument();
+    expect(screen.getByText('On-demand')).toBeInTheDocument();
   });
 
   it('displays total flow', () => {
@@ -120,6 +120,6 @@ describe('StatusBar', () => {
     // Multiple '0' values in empty state, just verify it renders without crashing
     expect(screen.getByText('Nodes:')).toBeInTheDocument();
     expect(screen.getByText('Pipes:')).toBeInTheDocument();
-    expect(screen.getByText('Disconnected')).toBeInTheDocument();
+    expect(screen.getByText('On-demand')).toBeInTheDocument();
   });
 });
